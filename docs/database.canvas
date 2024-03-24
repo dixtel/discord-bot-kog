@@ -1,0 +1,29 @@
+{
+	"nodes":[
+		{"id":"78b9d4ddf084f858","type":"group","x":-270,"y":-280,"width":290,"height":860,"label":"Map"},
+		{"id":"60bbd782cdc9f57b","type":"group","x":240,"y":-580,"width":290,"height":350,"label":"Role"},
+		{"id":"3e8edc6d30c7f337","x":206,"y":95,"width":290,"height":274,"type":"group","label":"TestingChannel"},
+		{"id":"9305db47222cf3c8","type":"group","x":-270,"y":-580,"width":290,"height":200,"label":"User"},
+		{"id":"aa02a5d3f601d1f4","type":"text","text":"Roles","x":-250,"y":-490,"width":250,"height":50},
+		{"id":"e921e1be3d501c56","type":"text","text":"user_id","x":260,"y":-560,"width":250,"height":50},
+		{"id":"32b1bb5206532310","type":"text","text":"role string\n- map_acceptor\n- tester","x":260,"y":-420,"width":250,"height":120},
+		{"id":"5920ceedefb2f10d","type":"text","text":"User","x":260,"y":-490,"width":250,"height":50},
+		{"id":"2a322af6fe197955","type":"text","text":"name","x":-250,"y":-260,"width":250,"height":50},
+		{"id":"8e3fdfb83401e19d","type":"text","text":"fixed_name","x":-250,"y":-190,"width":250,"height":50},
+		{"id":"7d1f458b7a88f39c","type":"text","text":"mapper_id","x":-250,"y":-120,"width":250,"height":50},
+		{"id":"7df591d4dd342362","type":"text","text":"Mapper","x":-250,"y":-50,"width":250,"height":53},
+		{"id":"36ed8c665bc8e863","type":"text","text":"file bytes","x":-250,"y":223,"width":250,"height":50},
+		{"id":"67d9ebd5b4404646","type":"text","text":"testing_channel_id","x":-250,"y":293,"width":250,"height":50},
+		{"id":"548bdf010bfe6792","type":"text","text":"TestingChannel","x":-250,"y":363,"width":250,"height":50},
+		{"id":"df65f8de5bd5078d","type":"text","text":"name string","x":226,"y":115,"width":250,"height":60},
+		{"id":"c647cf1be2e84acb","type":"text","text":"approved_by_testers int","x":226,"y":195,"width":250,"height":50},
+		{"id":"36a1e6860e94b1f0","type":"text","text":"declined_by_testers int","x":226,"y":265,"width":250,"height":50},
+		{"id":"0509f75d7a04266b","type":"text","text":"Status string\n- waiting_to_accept\n- testing\n- accepted\n- declined\n\t","x":-250,"y":23,"width":250,"height":180},
+		{"id":"08384e81a0ca7ae8","type":"text","text":"username","x":-250,"y":-560,"width":250,"height":50}
+	],
+	"edges":[
+		{"id":"cc37290ab0bcf8d0","fromNode":"e921e1be3d501c56","fromSide":"left","toNode":"9305db47222cf3c8","toSide":"right"},
+		{"id":"2748599f4ff1e957","fromNode":"67d9ebd5b4404646","fromSide":"right","toNode":"3e8edc6d30c7f337","toSide":"left"},
+		{"id":"70401bbef7ace855","fromNode":"7d1f458b7a88f39c","fromSide":"left","toNode":"9305db47222cf3c8","toSide":"left"}
+	]
+}
