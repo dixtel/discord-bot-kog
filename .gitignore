@@ -1,4 +1,4 @@
 .vscode
 sqlite.db
 docs/.obsidian/workspace.json
-twgpu/bin/
+twgpu/*
