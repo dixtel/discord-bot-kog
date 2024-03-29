@@ -1,0 +1,2 @@
+- [ ] show commands to user based on access level etc
+- [ ] 

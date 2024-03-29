@@ -13,16 +13,26 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type UploadCommand struct {
+type UpdateCommand struct {
 	applicationCommand *discordgo.ApplicationCommand
 	Database           *models.Database
 }
 
-func (c *UploadCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	if i.ChannelID != config.CONFIG.SubmitMapsChannelID {
+func (c *UpdateCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreate) error {
+	user, err := c.Database.CreateOrGetUser(i.Member.User.Username, i.Member.User.ID)
+	if err != nil {
+		return fmt.Errorf("cannot create or get an user: %w", err)
+	}
+
+	isTestingChannel, err := c.Database.IsTestingChannel(i.ChannelID)
+	if err != nil {
+		return fmt.Errorf("cannot check if current channel is a testing channel: %w", err)
+	}
+
+	if !isTestingChannel {
 		helpers.SendResponse(
 			helpers.SendMessageTypeOriginator,
-			fmt.Sprintf("This command can be used only in %s channel", config.CONFIG.SubmitMapsChannelName),
+			"This is not a channel for testing",
 			s,
 			i,
 		)
@@ -30,20 +40,15 @@ func (c *UploadCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 		return nil
 	}
 
-	user, err := c.Database.CreateOrGetUser(i.Member.User.Username, i.Member.User.ID)
+	canUpdateMap, err := c.Database.UserCanUpdateMap(user.ID, i.ChannelID)
 	if err != nil {
-		return fmt.Errorf("cannot create or get an user: %w", err)
+		return fmt.Errorf("cannot check if user can update the map: %w", err)
 	}
 
-	hasUnacceptedMap, err := c.Database.UserHasUnacceptedMap(user.ID)
-	if err != nil {
-		return fmt.Errorf("cannot check if user have unaccepted map: %w", err)
-	}
-
-	if hasUnacceptedMap {
+	if !canUpdateMap {
 		helpers.SendResponse(
 			helpers.SendMessageTypeOriginator,
-			"You cannot upload a new map because you have another map waiting for acceptance.",
+			"You cannot update the map",
 			s,
 			i,
 		)
@@ -56,17 +61,28 @@ func (c *UploadCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 		return fmt.Errorf("cannot get attachment")
 	}
 
-	// TODO: map name validation
-
-	mapExists, err := c.Database.MapExists(attachment.Filename)
+	m, err := c.Database.GetLastUploadedMap(i.Member.User.ID)
 	if err != nil {
-		return fmt.Errorf("cannot check if map already exists: %w", err)
+		return fmt.Errorf("cannot get last uploaded map: %w", err)
 	}
 
-	if mapExists {
+	if m.Status != models.MapStatus_Testing {
 		helpers.SendResponse(
 			helpers.SendMessageTypeOriginator,
-			"This map name is already taken. Please upload again with a different name",
+			fmt.Sprintf(
+				"Cannot update the map. Current map status is %q.",
+				m.Status,
+			),
+			s,
+			i,
+		)
+		return nil
+	}
+
+	if m.Name != attachment.Filename {
+		helpers.SendResponse(
+			helpers.SendMessageTypeOriginator,
+			fmt.Sprintf("Your map file should be named %q instead of %q", m.Name, attachment.Filename),
 			s,
 			i,
 		)
@@ -84,15 +100,24 @@ func (c *UploadCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 		return fmt.Errorf("cannot make screenshot of the map: %w", err)
 	}
 
-	_, err = c.Database.CreateMap(attachment.Filename, user.ID, mapSource)
+	err = c.Database.UpdateMap(m.ID, mapSource)
 	if err != nil {
 		return fmt.Errorf("cannot create map %w", err)
 	}
 
+	err = c.Database.UpdateTestingChannelData(m.ID, &models.TestingChannelData{
+		ApprovedBy: map[string]struct{}{},
+		DeclinedBy: map[string]struct{}{},
+	})
+	if err != nil {
+		return fmt.Errorf("cannot update testing channel data %w", err)
+	}
+
+	// TODO: to show map diff we need to save previous screenshot in database
+
 	helpers.SendResponseWithImage(
 		helpers.SendMessageTypeAll,
-		// TODO: i.Member.Nick is empty
-		fmt.Sprintf("Screenshot of uploaded map %s by %s", attachment.Filename, i.Member.Nick),
+		fmt.Sprintf("Screenshot of updated map %s", attachment.Filename),
 		strings.Replace(attachment.Filename, ".map", ".png", 1),
 		bytes.NewReader(screenshotSource),
 		s,
@@ -102,15 +127,15 @@ func (c *UploadCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 	return nil
 }
 
-func (c *UploadCommand) GetName() string {
-	return "upload"
+func (c *UpdateCommand) GetName() string {
+	return "update"
 }
 
-func (c *UploadCommand) GetDescription() string {
-	return "Upload a new map"
+func (c *UpdateCommand) GetDescription() string {
+	return "Submit an updated map"
 }
 
-func (c *UploadCommand) ApplicationCommandCreate(s *discordgo.Session) {
+func (c *UpdateCommand) ApplicationCommandCreate(s *discordgo.Session) {
 	applicationCommand, err := s.ApplicationCommandCreate(
 		config.CONFIG.AppID,
 		config.CONFIG.GuildID,
@@ -124,7 +149,7 @@ func (c *UploadCommand) ApplicationCommandCreate(s *discordgo.Session) {
 
 					Type:        discordgo.ApplicationCommandOptionAttachment,
 					Name:        "file",
-					Description: "Map file",
+					Description: "Updated map file",
 					Required:    true,
 				},
 			},
@@ -136,7 +161,7 @@ func (c *UploadCommand) ApplicationCommandCreate(s *discordgo.Session) {
 	c.applicationCommand = applicationCommand
 }
 
-func (c *UploadCommand) ApplicationCommandDelete(s *discordgo.Session) {
+func (c *UpdateCommand) ApplicationCommandDelete(s *discordgo.Session) {
 	log := log.With().Str("command-name", c.GetName()).Logger()
 
 	if c.applicationCommand == nil {

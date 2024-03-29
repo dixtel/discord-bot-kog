@@ -16,18 +16,25 @@ import (
 )
 
 func main() {
-	db, err := gorm.Open(sqlite.Open("sqlite.db"), &gorm.Config{})
+	gormDb, err := gorm.Open(sqlite.Open("sqlite.db"), &gorm.Config{})
 	if err != nil {
 		log.Error().Err(err).Msg("cannot connect to database")
 		return
 	}
 
-	err = db.AutoMigrate(
+	err = gormDb.AutoMigrate(
 		&models.User{},
+		&models.Map{},
+		&models.Role{},
+		&models.TestingChannel{},
 	)
 	if err != nil {
 		log.Error().Err(err).Msg("cannot migrate models")
 		return
+	}
+
+	db := &models.Database{
+		DB: gormDb,
 	}
 
 	// Create a new Discord session using the provided bot token.

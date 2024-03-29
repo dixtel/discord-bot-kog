@@ -5,7 +5,7 @@ import (
 	"github.com/dixtel/dicord-bot-kog/helpers"
 )
 
-func getAttachment(i *discordgo.InteractionCreate, optionName string) *discordgo.MessageAttachment {
+func getAttachmentFromOption(i *discordgo.InteractionCreate, optionName string) *discordgo.MessageAttachment {
 	option := helpers.First(
 		i.ApplicationCommandData().Options,
 		func(val *discordgo.ApplicationCommandInteractionDataOption) bool {
@@ -18,4 +18,18 @@ func getAttachment(i *discordgo.InteractionCreate, optionName string) *discordgo
 
 	// TODO: prevent from panic
 	return i.ApplicationCommandData().Resolved.Attachments[(*option).Value.(string)]
+}
+
+func getUserFromOption(s *discordgo.Session, i *discordgo.InteractionCreate, optionName string) *discordgo.User {
+	option := helpers.First(
+		i.ApplicationCommandData().Options,
+		func(val *discordgo.ApplicationCommandInteractionDataOption) bool {
+			return val.Name == optionName
+		},
+	)
+	if option == nil {
+		return nil
+	}
+
+	return (*option).UserValue(s)
 }

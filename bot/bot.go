@@ -1,17 +1,33 @@
 package bot
 
 import (
+	"fmt"
+
 	"github.com/bwmarrin/discordgo"
 	"github.com/dixtel/dicord-bot-kog/command"
 	"github.com/dixtel/dicord-bot-kog/helpers"
+	"github.com/dixtel/dicord-bot-kog/models"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
-	"gorm.io/gorm"
 )
 
-
-func createCommands(db *gorm.DB) []command.CommandInterface {
+func createCommands(db *models.Database) []command.CommandInterface {
 	return []command.CommandInterface{
-		&command.UploadCommand{},
+		&command.UploadCommand{
+			Database: db,
+		},
+		&command.AcceptCommand{
+			Database: db,
+		},
+		&command.UpdateCommand{
+			Database: db,
+		},
+		&command.ApproveCommand{
+			Database: db,
+		},
+		&command.DeclineCommand{
+			Database: db,
+		},
 	}
 
 	// return []*Command{
@@ -58,7 +74,7 @@ func createCommands(db *gorm.DB) []command.CommandInterface {
 	// }
 }
 
-func SetupCommands(s *discordgo.Session, db *gorm.DB) func() {
+func SetupCommands(s *discordgo.Session, db *models.Database) func() {
 	cmds := createCommands(db)
 
 	deferFunc := func() {
@@ -78,13 +94,20 @@ func SetupCommands(s *discordgo.Session, db *gorm.DB) func() {
 			},
 		)
 		if handler == nil {
-			log.Error().Msgf("handler not found for command name")
+			log.Error().Msgf("handler not found for given command name")
 			return
 		}
 
 		err := (*handler).Handle(s, i)
 		if err != nil {
-			log.Error().Err(err).Msgf("cannot handle command invocation")
+			issueID := uuid.NewString()
+			helpers.SendResponse(
+				helpers.SendMessageTypeOriginator,
+				fmt.Sprintf("We encountered some issues during this command invocation. Please report this to an administrator. Issue ID %s", issueID),
+				s, i,
+			)
+			log.Error().Err(err).Str("issueID", issueID).Msg("cannot handle command invocation")
+
 			return
 		}
 	})

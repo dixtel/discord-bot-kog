@@ -1,11 +1,32 @@
 package models
 
-import "gorm.io/gorm"
+import (
+	"encoding/json"
+	"time"
+
+	"gorm.io/gorm"
+)
+
+type Model struct {
+	ID        string `gorm:"primarykey"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt gorm.DeletedAt `gorm:"index"`
+}
 
 type User struct {
-	gorm.Model
+	Model
 	Username string
 	Roles    []Role
+}
+
+func (u *User) HasRole(wantedRole RoleName) bool {
+	for _, role := range u.Roles {
+		if role.Role == wantedRole {
+			return true
+		}
+	}
+	return false
 }
 
 type RoleName string
@@ -16,8 +37,8 @@ var (
 )
 
 type Role struct {
-	gorm.Model
-	UserID int
+	Model
+	UserID string
 	User   User
 	Role   RoleName
 }
@@ -32,20 +53,45 @@ var (
 )
 
 type Map struct {
-	gorm.Model
-	Name             string
-	FixedName        string
-	MapperID         int
-	Mapper           User
-	TestingChannelID int
-	TestingChannel   TestingChannel
-	Status           MapStatus
-	File             []byte
+	Model
+	Name     string
+	MapperID string
+	Mapper   User
+	// NULL if status is 'waiting_to_accept'
+	TestingChannelID *string
+	// NULL if status is 'waiting_to_accept'
+	TestingChannel *TestingChannel
+	Status         MapStatus
+	File           []byte
+}
+
+type TestingChannelData struct {
+	// Tester ID as key
+	ApprovedBy map[string]struct{}
+	// Tester ID as key
+	DeclinedBy map[string]struct{}
 }
 
 type TestingChannel struct {
-	gorm.Model
-	Name              string
-	ApprovedByTesters int
-	DeclinedByTesters int
+	Model
+	ChannelID   string
+	ChannelName string
+	// TestingChannelData
+	Data string
+}
+
+func (d *TestingChannelData) ToString() (string, error) {
+	b, err := json.Marshal(&d)
+	return string(b), err
+}
+
+func (TestingChannelData) FromString(src string) (*TestingChannelData, error) {
+	var data TestingChannelData
+
+	err := json.Unmarshal([]byte(src), &data)
+	if err != nil {
+		return nil, err
+	}
+
+	return &data, nil
 }

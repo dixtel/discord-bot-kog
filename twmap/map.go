@@ -1,6 +1,7 @@
 package twmap
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -8,12 +9,10 @@ import (
 	"os/exec"
 	"regexp"
 
-	"github.com/dixtel/dicord-bot-kog/models"
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
-var FIXED_MAP_NAME_REGEX = regexp.MustCompile(`[a-zA-Z_\-0-9]`)
+var FIXED_MAP_NAME_REGEX = regexp.MustCompile(`[a-zA-Z_\-0-9\.]`)
 
 func FixMapName(name string) string {
 	fixed := ""
@@ -25,20 +24,22 @@ func FixMapName(name string) string {
 	return fixed
 }
 
-//TODO: test this function
-func MapNameExists(db *gorm.DB, fixedMapName string) (bool, error) {
-	record := &models.Map{
-		FixedName: fixedMapName,
+func DownloadMapFromDiscord(mapUrl string) ([]byte, error) {
+	res, err := http.Get(mapUrl)
+	if err != nil {
+		return nil, fmt.Errorf("cannot http get: %w", err)
 	}
-	res := db.First(record)
-	if res.Error != nil {
-		return false, fmt.Errorf("cannot get first record: %w", res.Error)
+	defer res.Body.Close()
+
+	b, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read all: %w", err)
 	}
 
-	return res.RowsAffected > 0, nil
+	return b, nil
 }
 
-func MakeScreenshot(mapUrl string) (io.ReadCloser, error) {
+func MakeScreenshot(mapSource []byte) ([]byte, error) {
 	dir := fmt.Sprintf("/tmp/%s", uuid.New().String())
 	
 	err := os.Mkdir(dir, os.ModePerm)
@@ -46,7 +47,7 @@ func MakeScreenshot(mapUrl string) (io.ReadCloser, error) {
 		return nil, fmt.Errorf("cannot crate temp directory: %w", err)
 	}
 
-	err = downloadMap(mapUrl, dir + "/input.map")
+	err = saveFile(mapSource, dir + "/input.map")
 	if err != nil { 
 		return nil, fmt.Errorf("cannot download map %w", err)
 	}
@@ -66,7 +67,7 @@ func MakeScreenshot(mapUrl string) (io.ReadCloser, error) {
 		return nil, fmt.Errorf("cannot execute command %v: %w", args, err)
 	}
 
-	file ,err := os.Open(dir + "/input.png")
+	file ,err := os.ReadFile(dir + "/input.png")
 	if err != nil { 
 		return nil, fmt.Errorf("cannot read screenshot file %w", err)
 	}
@@ -74,17 +75,15 @@ func MakeScreenshot(mapUrl string) (io.ReadCloser, error) {
 	return file, nil
 }
 
-func downloadMap(url string, outputPath string) error {
-	res, err := http.Get(url)
-	if err != nil {
-		return fmt.Errorf("cannot http get: %w", err)
+func saveFile(source []byte, path string) error {
+	out, err := os.Create(path)
+	if err != nil { 
+		return  fmt.Errorf("cannot create file: %w", err)
 	}
-	defer res.Body.Close()
-
-	out, err := os.Create(outputPath)
+	
 	defer out.Close()
 
-	_, err = io.Copy(out, res.Body)
+	_, err = io.Copy(out, bytes.NewReader(source))
 	if err != nil {
 		return fmt.Errorf("cannot copy: %w", err)
 	}
