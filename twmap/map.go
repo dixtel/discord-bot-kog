@@ -8,20 +8,20 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strings"
 
 	"github.com/google/uuid"
 )
 
-var FIXED_MAP_NAME_REGEX = regexp.MustCompile(`[a-zA-Z_\-0-9\.]`)
+var FIXED_MAP_NAME_REGEX = regexp.MustCompile(`[a-zA-Z_\-0-9]`)
+var VALID_MAP_FILE_NAME = regexp.MustCompile(`^[a-zA-Z_\-0-9]+\.map$`)
 
-func FixMapName(name string) string {
-	fixed := ""
-	for _, ch := range name {
-		if FIXED_MAP_NAME_REGEX.Match([]byte{byte(ch)}) {
-			fixed += string(ch)
-		}
-	}
-	return fixed
+func IsMapNameValid(filename string) bool {
+	return VALID_MAP_FILE_NAME.Match([]byte(filename))
+}
+
+func FixMapName(filename string) string {
+	return strings.Replace(filename, ".map", "", 1)
 }
 
 func DownloadMapFromDiscord(mapUrl string) ([]byte, error) {

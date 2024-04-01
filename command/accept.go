@@ -1,13 +1,16 @@
 package command
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/dixtel/dicord-bot-kog/config"
 	"github.com/dixtel/dicord-bot-kog/helpers"
 	"github.com/dixtel/dicord-bot-kog/models"
+	"github.com/dixtel/dicord-bot-kog/roles"
 	"github.com/dixtel/dicord-bot-kog/twmap"
 	"github.com/rs/zerolog/log"
 	"gorm.io/gorm"
@@ -16,34 +19,32 @@ import (
 type AcceptCommand struct {
 	applicationCommand *discordgo.ApplicationCommand
 	Database           *models.Database
+	BotRoles           *roles.BotRoles
 }
 
 func (c *AcceptCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	if i.ChannelID != config.CONFIG.SubmitMapsChannelID {
-		helpers.SendResponse(
-			helpers.SendMessageTypeOriginator,
-			fmt.Sprintf("This command can be used only in %s channel", config.CONFIG.SubmitMapsChannelName),
-			s,
-			i,
-		)
-
-		return nil
+	interaction, err := FromDiscordInteraction(s, i)
+	if err != nil {
+		return fmt.Errorf("cannot create interaction: %w", err)
 	}
 
-	invocator, err := c.Database.CreateOrGetUser(i.Member.User.Username, i.Member.User.ID)
+	if i.ChannelID != config.CONFIG.SubmitMapsChannelID {
+		return interaction.SendMessage(
+			fmt.Sprintf("This command can be used only in %s channel", config.CONFIG.SubmitMapsChannelName),
+			InteractionMessageType_Private,
+		)
+	}
+
+	_, err = c.Database.CreateOrGetUser(i.Member.User.Username, i.Member.User.ID)
 	if err != nil {
 		return fmt.Errorf("cannot create or get an user: %w", err)
 	}
 
-	if !invocator.HasRole(models.RoleName_MapAcceptor) {
-		helpers.SendResponse(
-			helpers.SendMessageTypeOriginator,
-			"You don't have permission to accept the map.",
-			s,
-			i,
+	if !c.BotRoles.HasMapAcceptorRole(i.Member) {
+		return interaction.SendMessage(
+			"You don't have role 'Map Acceptor' to accept the map.",
+			InteractionMessageType_Private,
 		)
-
-		return nil
 	}
 
 	mapCreator := getUserFromOption(s, i, "user")
@@ -51,29 +52,22 @@ func (c *AcceptCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 	m, err := c.Database.GetLastUploadedMap(mapCreator.ID)
 
 	if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
-		helpers.SendResponse(
-			helpers.SendMessageTypeOriginator,
+		return interaction.SendMessage(
 			"This user doesn't have any uploaded map waiting to be accepted",
-			s,
-			i,
+			InteractionMessageType_Private,
 		)
-
-		return nil
 	} else if err != nil {
 		return fmt.Errorf("cannot get last uploaded map: %w", err)
 	}
 
 	if m.Status != models.MapStatus_WaitingToAccept {
-		helpers.SendResponse(
-			helpers.SendMessageTypeOriginator,
+		return interaction.SendMessage(
 			fmt.Sprintf(
 				"This user doesn't have any uploaded map waiting to be accepted. The last map status for this user is %q.",
 				m.Status,
 			),
-			s,
-			i,
+			InteractionMessageType_Private,
 		)
-		return nil
 	}
 
 	channelName := fmt.Sprintf(config.CONFIG.TestingChannelFormat, twmap.FixMapName(m.Name))
@@ -108,18 +102,29 @@ func (c *AcceptCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 		return fmt.Errorf("cannot mark map as accepted: %w", err)
 	}
 
-	helpers.SendResponse(
-		helpers.SendMessageTypeOriginator,
-		fmt.Sprintf(
-			// "The map was accepted. A new channel mapping_channel_BMO.map was created."
-			"The map was accepted. A new channel %s was created.",
-			channelName,
-		),
-		s,
-		i,
+	_, err = s.ChannelMessageSendComplex(
+		discordChannel.ID,
+		&discordgo.MessageSend{
+			Content: fmt.Sprintf(
+				"New map %s from %s!",
+				strings.Replace(m.Name, ".map", "", 1),
+				getUsername(i),
+			),
+			File: &discordgo.File{
+				Name:        strings.Replace(m.Name, ".map", ".png", 1),
+				ContentType: "image/png",
+				Reader:      bytes.NewReader(m.Screenshot),
+			},
+		},
 	)
+	if err != nil {
+		return fmt.Errorf("cannot send message to channel: %w", err)
+	}
 
-	return nil
+	return interaction.SendMessage(
+		fmt.Sprintf("The map was accepted. A new channel %s was created.", channelName),
+		InteractionMessageType_Private,
+	)
 }
 
 func (c *AcceptCommand) GetName() string {
@@ -135,10 +140,10 @@ func (c *AcceptCommand) ApplicationCommandCreate(s *discordgo.Session) {
 		config.CONFIG.AppID,
 		config.CONFIG.GuildID,
 		&discordgo.ApplicationCommand{
-			Name:        c.GetName(),
-			Type:        discordgo.ChatApplicationCommand,
-			Description: c.GetDescription(),
-
+			Name:                     c.GetName(),
+			Type:                     discordgo.ChatApplicationCommand,
+			Description:              c.GetDescription(),
+			DefaultMemberPermissions: helpers.ToPtr(int64(0)),
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 

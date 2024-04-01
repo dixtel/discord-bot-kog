@@ -32,7 +32,7 @@ func SendResponse(
 			log.Error().Err(err).Msg("cannot send message to originator")
 			return
 		}
-	} else if msgType == SendMessageTypeAll{
+	} else if msgType == SendMessageTypeAll {
 		err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
@@ -40,7 +40,7 @@ func SendResponse(
 			},
 		})
 		if err != nil {
-			log.Error().Err(err).Msg("cannot send message to originator")
+			log.Error().Err(err).Msg("cannot send message to all")
 			return
 		}
 
@@ -76,7 +76,7 @@ func SendResponseWithImage(
 			log.Error().Err(err).Msg("cannot send message to originator")
 			return
 		}
-	} else if msgType == SendMessageTypeAll{
+	} else if msgType == SendMessageTypeAll {
 		err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
@@ -91,11 +91,42 @@ func SendResponseWithImage(
 			},
 		})
 		if err != nil {
-			log.Error().Err(err).Msg("cannot send message to originator")
+			log.Error().Err(err).Msg("cannot send message to all")
 			return
 		}
 
 	} else {
 		log.Error().Msgf("wrong send message type %q", msgType)
+	}
+}
+
+func SendMessageWithImage(
+	msg string,
+	channelID string,
+	imgName string,
+	imgReader io.Reader,
+	s *discordgo.Session,
+) {
+	_, err := s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
+		Content:    msg,
+		Embeds:     []*discordgo.MessageEmbed{},
+		TTS:        false,
+		Components: []discordgo.MessageComponent{},
+		Files: []*discordgo.File{
+			{
+				Name:        imgName,
+				ContentType: "image/png",
+				Reader:      imgReader,
+			},
+		},
+		AllowedMentions: &discordgo.MessageAllowedMentions{},
+		Reference:       &discordgo.MessageReference{},
+		File:            &discordgo.File{},
+		Embed:           &discordgo.MessageEmbed{},
+	})
+
+	if err != nil {
+		log.Error().Err(err).Msg("cannot send message")
+		return
 	}
 }

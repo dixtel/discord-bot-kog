@@ -33,3 +33,15 @@ func getUserFromOption(s *discordgo.Session, i *discordgo.InteractionCreate, opt
 
 	return (*option).UserValue(s)
 }
+
+func getUsername(i *discordgo.InteractionCreate) string {
+	if i.Member != nil && i.Member.Nick != ""  {
+		return i.Member.Nick
+	} 
+
+	if i.Member.User != nil && i.Member.User.Username != ""  {
+		return i.Member.User.Username
+	} 
+
+	return "<undefined>"
+}

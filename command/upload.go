@@ -1,14 +1,13 @@
 package command
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/dixtel/dicord-bot-kog/config"
-	"github.com/dixtel/dicord-bot-kog/helpers"
 	"github.com/dixtel/dicord-bot-kog/models"
+	"github.com/dixtel/dicord-bot-kog/roles"
 	"github.com/dixtel/dicord-bot-kog/twmap"
 	"github.com/rs/zerolog/log"
 )
@@ -16,39 +15,40 @@ import (
 type UploadCommand struct {
 	applicationCommand *discordgo.ApplicationCommand
 	Database           *models.Database
+	BotRoles           *roles.BotRoles
 }
 
 func (c *UploadCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	if i.ChannelID != config.CONFIG.SubmitMapsChannelID {
-		helpers.SendResponse(
-			helpers.SendMessageTypeOriginator,
-			fmt.Sprintf("This command can be used only in %s channel", config.CONFIG.SubmitMapsChannelName),
-			s,
-			i,
-		)
-
-		return nil
+	interaction, err := FromDiscordInteraction(s, i)
+	if err != nil {
+		return fmt.Errorf("cannot create interaction: %w", err)
 	}
 
-	user, err := c.Database.CreateOrGetUser(i.Member.User.Username, i.Member.User.ID)
+	if i.ChannelID != config.CONFIG.SubmitMapsChannelID {
+		return interaction.SendMessage(
+			fmt.Sprintf("This command can be used only in %s channel", config.CONFIG.SubmitMapsChannelName),
+			InteractionMessageType_Private,
+		)
+	}
+
+	database, commitOrRollback := c.Database.Tx()
+	defer commitOrRollback(&err)
+
+	user, err := database.CreateOrGetUser(i.Member.User.Username, i.Member.User.ID)
 	if err != nil {
 		return fmt.Errorf("cannot create or get an user: %w", err)
 	}
 
-	hasUnacceptedMap, err := c.Database.UserHasUnacceptedMap(user.ID)
+	hasUnacceptedMap, err := database.UserHasUnacceptedMap(user.ID)
 	if err != nil {
 		return fmt.Errorf("cannot check if user have unaccepted map: %w", err)
 	}
 
 	if hasUnacceptedMap {
-		helpers.SendResponse(
-			helpers.SendMessageTypeOriginator,
+		return interaction.SendMessage(
 			"You cannot upload a new map because you have another map waiting for acceptance.",
-			s,
-			i,
+			InteractionMessageType_Private,
 		)
-
-		return nil
 	}
 
 	attachment := getAttachmentFromOption(i, "file")
@@ -56,22 +56,23 @@ func (c *UploadCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 		return fmt.Errorf("cannot get attachment")
 	}
 
-	// TODO: map name validation
+	if !twmap.IsMapNameValid(attachment.Filename) {
+		return interaction.SendMessage(
+			"Incorrect map filename. Should be in format 'abc_1-2.map'",
+			InteractionMessageType_Private,
+		)
+	}
 
-	mapExists, err := c.Database.MapExists(attachment.Filename)
+	mapExists, err := database.MapExists(attachment.Filename)
 	if err != nil {
 		return fmt.Errorf("cannot check if map already exists: %w", err)
 	}
 
 	if mapExists {
-		helpers.SendResponse(
-			helpers.SendMessageTypeOriginator,
+		return interaction.SendMessage(
 			"This map name is already taken. Please upload again with a different name",
-			s,
-			i,
+			InteractionMessageType_Private,
 		)
-
-		return nil
 	}
 
 	mapSource, err := twmap.DownloadMapFromDiscord(attachment.URL)
@@ -84,22 +85,21 @@ func (c *UploadCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 		return fmt.Errorf("cannot make screenshot of the map: %w", err)
 	}
 
-	_, err = c.Database.CreateMap(attachment.Filename, user.ID, mapSource)
+	_, err = database.CreateMap(attachment.Filename, user.ID, mapSource, screenshotSource)
 	if err != nil {
 		return fmt.Errorf("cannot create map %w", err)
 	}
 
-	helpers.SendResponseWithImage(
-		helpers.SendMessageTypeAll,
-		// TODO: i.Member.Nick is empty
-		fmt.Sprintf("Screenshot of uploaded map %s by %s", attachment.Filename, i.Member.Nick),
+	return interaction.SendMessageWithPNGImage(
+		fmt.Sprintf(
+			"New map %s from %s!", 
+			strings.Replace(attachment.Filename, ".map", "", 1), 
+			getUsername(i),
+		),
+		InteractionMessageType_Public,
 		strings.Replace(attachment.Filename, ".map", ".png", 1),
-		bytes.NewReader(screenshotSource),
-		s,
-		i,
+		screenshotSource,
 	)
-
-	return nil
 }
 
 func (c *UploadCommand) GetName() string {

@@ -1,14 +1,13 @@
 package command
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/dixtel/dicord-bot-kog/config"
-	"github.com/dixtel/dicord-bot-kog/helpers"
 	"github.com/dixtel/dicord-bot-kog/models"
+	"github.com/dixtel/dicord-bot-kog/roles"
 	"github.com/dixtel/dicord-bot-kog/twmap"
 	"github.com/rs/zerolog/log"
 )
@@ -16,9 +15,15 @@ import (
 type UpdateCommand struct {
 	applicationCommand *discordgo.ApplicationCommand
 	Database           *models.Database
+	BotRoles           *roles.BotRoles
 }
 
 func (c *UpdateCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreate) error {
+	interaction, err := FromDiscordInteraction(s, i)
+	if err != nil {
+		return fmt.Errorf("cannot create interaction: %w", err)
+	}
+
 	user, err := c.Database.CreateOrGetUser(i.Member.User.Username, i.Member.User.ID)
 	if err != nil {
 		return fmt.Errorf("cannot create or get an user: %w", err)
@@ -30,14 +35,10 @@ func (c *UpdateCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 	}
 
 	if !isTestingChannel {
-		helpers.SendResponse(
-			helpers.SendMessageTypeOriginator,
+		return interaction.SendMessage(
 			"This is not a channel for testing",
-			s,
-			i,
+			InteractionMessageType_Private,
 		)
-
-		return nil
 	}
 
 	canUpdateMap, err := c.Database.UserCanUpdateMap(user.ID, i.ChannelID)
@@ -46,14 +47,10 @@ func (c *UpdateCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 	}
 
 	if !canUpdateMap {
-		helpers.SendResponse(
-			helpers.SendMessageTypeOriginator,
+		return interaction.SendMessage(
 			"You cannot update the map",
-			s,
-			i,
+			InteractionMessageType_Private,
 		)
-
-		return nil
 	}
 
 	attachment := getAttachmentFromOption(i, "file")
@@ -67,27 +64,17 @@ func (c *UpdateCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 	}
 
 	if m.Status != models.MapStatus_Testing {
-		helpers.SendResponse(
-			helpers.SendMessageTypeOriginator,
-			fmt.Sprintf(
-				"Cannot update the map. Current map status is %q.",
-				m.Status,
-			),
-			s,
-			i,
+		return interaction.SendMessage(
+			fmt.Sprintf("Cannot update the map. Current map status is %q.", m.Status),
+			InteractionMessageType_Private,
 		)
-		return nil
 	}
 
 	if m.Name != attachment.Filename {
-		helpers.SendResponse(
-			helpers.SendMessageTypeOriginator,
+		return interaction.SendMessage(
 			fmt.Sprintf("Your map file should be named %q instead of %q", m.Name, attachment.Filename),
-			s,
-			i,
+			InteractionMessageType_Private,
 		)
-
-		return nil
 	}
 
 	mapSource, err := twmap.DownloadMapFromDiscord(attachment.URL)
@@ -100,7 +87,7 @@ func (c *UpdateCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 		return fmt.Errorf("cannot make screenshot of the map: %w", err)
 	}
 
-	err = c.Database.UpdateMap(m.ID, mapSource)
+	err = c.Database.UpdateMap(m.ID, mapSource, screenshotSource)
 	if err != nil {
 		return fmt.Errorf("cannot create map %w", err)
 	}
@@ -115,16 +102,13 @@ func (c *UpdateCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 
 	// TODO: to show map diff we need to save previous screenshot in database
 
-	helpers.SendResponseWithImage(
-		helpers.SendMessageTypeAll,
-		fmt.Sprintf("Screenshot of updated map %s", attachment.Filename),
-		strings.Replace(attachment.Filename, ".map", ".png", 1),
-		bytes.NewReader(screenshotSource),
-		s,
-		i,
-	)
 
-	return nil
+	return interaction.SendMessageWithPNGImage(
+		fmt.Sprintf("Map %s was updated", strings.Replace(attachment.Filename, ".map", "", 1)),
+		InteractionMessageType_Private,
+		strings.Replace(attachment.Filename, ".map", ".png", 1),
+		screenshotSource,
+	)
 }
 
 func (c *UpdateCommand) GetName() string {

@@ -5,18 +5,24 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/dixtel/dicord-bot-kog/config"
-	"github.com/dixtel/dicord-bot-kog/helpers"
 	"github.com/dixtel/dicord-bot-kog/models"
+	"github.com/dixtel/dicord-bot-kog/roles"
 	"github.com/rs/zerolog/log"
 )
 
 type ApproveCommand struct {
 	applicationCommand *discordgo.ApplicationCommand
 	Database           *models.Database
+	BotRoles           *roles.BotRoles
 }
 
 func (c *ApproveCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	user, err := c.Database.CreateOrGetUser(i.Member.User.Username, i.Member.User.ID)
+	interaction, err := FromDiscordInteraction(s, i)
+	if err != nil {
+		return fmt.Errorf("cannot create interaction: %w", err)
+	}
+
+	_, err = c.Database.CreateOrGetUser(i.Member.User.Username, i.Member.User.ID)
 	if err != nil {
 		return fmt.Errorf("cannot create or get an user: %w", err)
 	}
@@ -27,30 +33,17 @@ func (c *ApproveCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCr
 	}
 
 	if !isTestingChannel {
-		helpers.SendResponse(
-			helpers.SendMessageTypeOriginator,
+		return interaction.SendMessage(
 			"This is not a channel for testing",
-			s,
-			i,
+			InteractionMessageType_Private,
 		)
-
-		return nil
 	}
 
-	canApproveMap, err := c.Database.UserCanApproveOrDeclineMap(user.ID)
-	if err != nil {
-		return fmt.Errorf("cannot check if user can approve/decline the map: %w", err)
-	}
-
-	if !canApproveMap {
-		helpers.SendResponse(
-			helpers.SendMessageTypeOriginator,
-			"You cannot approve the map",
-			s,
-			i,
+	if !c.BotRoles.HasMapAcceptorRole(i.Member) && !c.BotRoles.HasMapTesterRole(i.Member) {
+		return interaction.SendMessage(
+			"You don't have role 'Tester' or 'Map Acceptor' to approve the map.",
+			InteractionMessageType_Private,
 		)
-
-		return nil
 	}
 
 	m, err := c.Database.GetLastUploadedMapByChannelID(i.ChannelID)
@@ -59,16 +52,10 @@ func (c *ApproveCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCr
 	}
 
 	if m.Status != models.MapStatus_Testing {
-		helpers.SendResponse(
-			helpers.SendMessageTypeOriginator,
-			fmt.Sprintf(
-				"Cannot approve the map. Current map status is %q.",
-				m.Status,
-			),
-			s,
-			i,
+		return interaction.SendMessage(
+			fmt.Sprintf("Cannot approve the map. Current map status is %q.", m.Status),
+			InteractionMessageType_Private,
 		)
-		return nil
 	}
 
 	data, err := c.Database.GetTestingChannelData(m.ID)
@@ -77,13 +64,10 @@ func (c *ApproveCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCr
 	}
 
 	if _, ok := data.ApprovedBy[i.Member.User.ID]; ok {
-		helpers.SendResponse(
-			helpers.SendMessageTypeOriginator,
+		return interaction.SendMessage(
 			"You already approved this map",
-			s,
-			i,
+			InteractionMessageType_Private,
 		)
-		return nil
 	}
 
 	data.ApprovedBy[i.Member.User.ID] = struct{}{}
@@ -93,15 +77,13 @@ func (c *ApproveCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCr
 		return fmt.Errorf("cannot update testing channel data %w", err)
 	}
 
-	helpers.SendResponse(
-		helpers.SendMessageTypeAll,
-		// TODO: nick can be empty somehow?
-		fmt.Sprintf("Map was approved by tester %s. (%v approvals / %v declines)", i.Member.Nick, len(data.ApprovedBy), len(data.DeclinedBy)),
-		s,
-		i,
+	return interaction.SendMessage(
+		fmt.Sprintf(
+			"Map was approved by tester %s. (%v approvals / %v declines)",
+			getUsername(i), len(data.ApprovedBy), len(data.DeclinedBy),
+		),
+		InteractionMessageType_Public,
 	)
-
-	return nil
 }
 
 func (c *ApproveCommand) GetName() string {

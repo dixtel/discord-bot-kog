@@ -7,75 +7,38 @@ import (
 	"github.com/dixtel/dicord-bot-kog/command"
 	"github.com/dixtel/dicord-bot-kog/helpers"
 	"github.com/dixtel/dicord-bot-kog/models"
+	"github.com/dixtel/dicord-bot-kog/roles"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 
-func createCommands(db *models.Database) []command.CommandInterface {
+func createCommands(db *models.Database, roles *roles.BotRoles) []command.CommandInterface {
 	return []command.CommandInterface{
 		&command.UploadCommand{
 			Database: db,
+			BotRoles: roles,
 		},
 		&command.AcceptCommand{
 			Database: db,
+			BotRoles: roles,
 		},
 		&command.UpdateCommand{
 			Database: db,
+			BotRoles: roles,
 		},
 		&command.ApproveCommand{
 			Database: db,
+			BotRoles: roles,
 		},
 		&command.DeclineCommand{
 			Database: db,
+			BotRoles: roles,
 		},
 	}
-
-	// return []*Command{
-	// 	{
-	// 		Name:        "upload",
-	// 		Description: "Upload a new map",
-	// 		Handler: func(_ *discordgo.InteractionCreate, sendMessage func(SendMessageType, string)) error {
-
-	// 			return nil
-	// 		},
-	// 	},
-	// 	{
-	// 		Name:        "accept",
-	// 		Description: "Accept the map. This command will create a new channel for map discussion and approval",
-	// 		Handler: func(_ *discordgo.InteractionCreate, sendMessage func(SendMessageType, string)) error {
-
-	// 			return nil
-	// 		},
-	// 	},
-	// 	{
-	// 		Name:        "approve",
-	// 		Description: "Approve the map",
-	// 		Handler: func(_ *discordgo.InteractionCreate, sendMessage func(SendMessageType, string)) error {
-
-	// 			return nil
-	// 		},
-	// 	},
-	// 	{
-	// 		Name:        "decline",
-	// 		Description: "Decline the map",
-	// 		Handler: func(_ *discordgo.InteractionCreate, sendMessage func(SendMessageType, string)) error {
-
-	// 			return nil
-	// 		},
-	// 	},
-	// 	{
-	// 		Name:        "update",
-	// 		Description: "Update the map",
-	// 		Handler: func(_ *discordgo.InteractionCreate, sendMessage func(SendMessageType, string)) error {
-
-	// 			return nil
-	// 		},
-	// 	},
-	// }
 }
 
-func SetupCommands(s *discordgo.Session, db *models.Database) func() {
-	cmds := createCommands(db)
+func SetupCommands(s *discordgo.Session, db *models.Database, roles *roles.BotRoles) func() {
+	cmds := createCommands(db, roles)
 
 	deferFunc := func() {
 		for _, cmd := range cmds {

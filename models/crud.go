@@ -5,11 +5,37 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"gorm.io/gorm"
 )
 
 type Database struct {
 	DB *gorm.DB
+}
+
+func (d *Database) Tx() (*Database, func(*error)) {
+	tx := d.DB.Begin()
+
+	return &Database{
+		DB: tx,
+	}, func (err *error)  {
+		r := recover()
+
+		if err != nil && *err != nil {
+			tx.Rollback()
+			log.Debug().Msg("rollback")
+		} else if err != nil && *err == nil {
+			tx.Commit()
+			log.Debug().Msg("commit")
+		} else {
+			tx.Commit()
+			log.Debug().Msg("commit")
+		}
+
+		if r != nil {
+			panic(r)
+		}
+	}
 }
 
 func (d *Database) UserHasUnacceptedMap(userID string) (bool, error) {
@@ -69,22 +95,7 @@ func (d *Database) IsTestingChannel(channelID string) (bool, error) {
 	return true, nil
 }
 
-func (d *Database) UserCanApproveOrDeclineMap(userID string) (bool, error) {
-	// TODO: do it better
-	role := &Role{}
-	res := d.DB.
-		Model(&Role{}).
-		Where("user_id = ? AND (role = ? OR role = ?)", userID, RoleName_Tester, RoleName_MapAcceptor).
-		First(role)
-
-	if res.Error != nil {
-		return false, res.Error
-	}
-
-	return res.RowsAffected == 1, nil
-}
-
-func (d *Database) CreateMap(name string, mapperID string, file []byte) (*Map, error) {
+func (d *Database) CreateMap(name string, mapperID string, file []byte, screenshot []byte) (*Map, error) {
 	m := &Map{
 		Model:            Model{ID: uuid.NewString()},
 		Name:             name,
@@ -92,18 +103,20 @@ func (d *Database) CreateMap(name string, mapperID string, file []byte) (*Map, e
 		TestingChannelID: nil,
 		Status:           MapStatus_WaitingToAccept,
 		File:             file,
+		Screenshot:       screenshot,
 	}
 	return m, d.DB.Create(m).Error
 }
 
-func (d *Database) UpdateMap(id string, file []byte) error {
+func (d *Database) UpdateMap(id string, file []byte, screenshot []byte) error {
 	return d.DB.
 		Model(&Map{}).
 		Where(&Map{
 			Model: Model{ID: id},
 		}).
 		Updates(&Map{
-			File: file,
+			File:       file,
+			Screenshot: screenshot,
 		}).Error
 }
 

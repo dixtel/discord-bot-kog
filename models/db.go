@@ -63,6 +63,7 @@ type Map struct {
 	TestingChannel *TestingChannel
 	Status         MapStatus
 	File           []byte
+	Screenshot     []byte
 }
 
 type TestingChannelData struct {

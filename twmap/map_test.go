@@ -14,3 +14,8 @@ func TestFixMapName(t *testing.T) {
 	require.Equal(t, FixMapName("ab -de"), "ab-de")
 	require.Equal(t, FixMapName("ab .de"), "ab.de")
 }
+
+func TestIsMapNameValid(t *testing.T) {
+	require.Equal(t, IsMapNameValid("abc123.map"), true)
+
+}
