@@ -34,7 +34,7 @@ func main() {
 	}
 
 	db := &models.Database{
-		DB: gormDb,
+		DB: gormDb.Debug(),
 	}
 
 	// Create a new Discord session using the provided bot token.

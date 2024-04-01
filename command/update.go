@@ -104,7 +104,7 @@ func (c *UpdateCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 
 
 	return interaction.SendMessageWithPNGImage(
-		fmt.Sprintf("Map %s was updated", strings.Replace(attachment.Filename, ".map", "", 1)),
+		fmt.Sprintf("Map %s was updated by %s", strings.Replace(attachment.Filename, ".map", "", 1), mentionUser(i)),
 		InteractionMessageType_Private,
 		strings.Replace(attachment.Filename, ".map", ".png", 1),
 		screenshotSource,

@@ -1,8 +1,6 @@
 package command
 
 import (
-	"fmt"
-
 	"github.com/bwmarrin/discordgo"
 	"github.com/dixtel/dicord-bot-kog/config"
 	"github.com/dixtel/dicord-bot-kog/models"
@@ -17,73 +15,14 @@ type DeclineCommand struct {
 }
 
 func (c *DeclineCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	interaction, err := FromDiscordInteraction(s, i)
-	if err != nil {
-		return fmt.Errorf("cannot create interaction: %w", err)
-	}
+	var err error
 
-	_, err = c.Database.CreateOrGetUser(i.Member.User.Username, i.Member.User.ID)
-	if err != nil {
-		return fmt.Errorf("cannot create or get an user: %w", err)
-	}
+	database, commitOrRollback := c.Database.Tx()
+	defer commitOrRollback(&err)
 
-	isTestingChannel, err := c.Database.IsTestingChannel(i.ChannelID)
-	if err != nil {
-		return fmt.Errorf("cannot check if current channel is a testing channel: %w", err)
-	}
+	err = approveOrDecline(database, c.BotRoles, s, i, ApproveORDecline_Decline)
 
-	if !isTestingChannel {
-		return interaction.SendMessage(
-			"This is not a channel for testing",
-			InteractionMessageType_Private,
-		)
-	}
-
-	if !c.BotRoles.HasMapAcceptorRole(i.Member) && !c.BotRoles.HasMapTesterRole(i.Member) {
-		return interaction.SendMessage(
-			"You don't have role 'Tester' or 'Map Acceptor' to decline the map.",
-			InteractionMessageType_Private,
-		)
-	}
-
-	m, err := c.Database.GetLastUploadedMapByChannelID(i.ChannelID)
-	if err != nil {
-		return fmt.Errorf("cannot get last uploaded map by channel id: %w", err)
-	}
-
-	if m.Status != models.MapStatus_Testing {
-		return interaction.SendMessage(
-			fmt.Sprintf("Cannot decline the map. Current map status is %q.", m.Status),
-			InteractionMessageType_Private,
-		)
-	}
-
-	data, err := c.Database.GetTestingChannelData(m.ID)
-	if err != nil {
-		return fmt.Errorf("cannot get testing channel data %w", err)
-	}
-
-	if _, ok := data.DeclinedBy[i.Member.User.ID]; ok {
-		return interaction.SendMessage(
-			"You already declined this map",
-			InteractionMessageType_Private,
-		)
-	}
-
-	data.DeclinedBy[i.Member.User.ID] = struct{}{}
-
-	err = c.Database.UpdateTestingChannelData(m.ID, data)
-	if err != nil {
-		return fmt.Errorf("cannot update testing channel data %w", err)
-	}
-
-	return interaction.SendMessage(
-		fmt.Sprintf(
-			"Map was declined by tester %s. (%v approvals / %v declines)",
-			getUsername(i), len(data.ApprovedBy), len(data.DeclinedBy),
-		),
-		InteractionMessageType_Public,
-	)
+	return err
 }
 
 func (c *DeclineCommand) GetName() string {

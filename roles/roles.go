@@ -67,7 +67,7 @@ func SetupRoles(s *discordgo.Session) (*BotRoles, error) {
 		return nil, err
 	}
 
-	roles.MapTester = r
+	roles.MapAcceptor = r
 
 	return roles, nil
 }

@@ -14,7 +14,7 @@ type Database struct {
 }
 
 func (d *Database) Tx() (*Database, func(*error)) {
-	tx := d.DB.Begin()
+	tx := d.DB.Begin().Debug()
 
 	return &Database{
 		DB: tx,
@@ -58,7 +58,7 @@ func (d *Database) UserHasUnacceptedMap(userID string) (bool, error) {
 }
 
 func (d *Database) UserCanUpdateMap(userID string, channelID string) (bool, error) {
-	m := &Map{}
+	m := &Map{} 
 	res := d.DB.
 		Order("created_at DESC").
 		Where(&Map{
@@ -73,7 +73,8 @@ func (d *Database) UserCanUpdateMap(userID string, channelID string) (bool, erro
 		return false, res.Error
 	}
 
-	return (m.Status == MapStatus_Testing) && (m.TestingChannelID == &channelID), nil
+
+	return (m.Status == MapStatus_Testing) && (m.TestingChannelID != nil) && (*m.TestingChannelID == channelID), nil 
 }
 
 func (d *Database) IsTestingChannel(channelID string) (bool, error) {

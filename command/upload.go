@@ -19,6 +19,11 @@ type UploadCommand struct {
 }
 
 func (c *UploadCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreate) error {
+	var err error
+
+	database, commitOrRollback := c.Database.Tx()
+	defer commitOrRollback(&err)
+
 	interaction, err := FromDiscordInteraction(s, i)
 	if err != nil {
 		return fmt.Errorf("cannot create interaction: %w", err)
@@ -30,9 +35,6 @@ func (c *UploadCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 			InteractionMessageType_Private,
 		)
 	}
-
-	database, commitOrRollback := c.Database.Tx()
-	defer commitOrRollback(&err)
 
 	user, err := database.CreateOrGetUser(i.Member.User.Username, i.Member.User.ID)
 	if err != nil {
@@ -94,7 +96,7 @@ func (c *UploadCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 		fmt.Sprintf(
 			"New map %s from %s!", 
 			strings.Replace(attachment.Filename, ".map", "", 1), 
-			getUsername(i),
+			mentionUser(i),
 		),
 		InteractionMessageType_Public,
 		strings.Replace(attachment.Filename, ".map", ".png", 1),

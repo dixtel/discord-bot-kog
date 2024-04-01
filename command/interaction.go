@@ -17,7 +17,7 @@ func FromDiscordInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Flags:   discordgo.MessageFlagsEphemeral,
-			Content: "Waiting to response...",
+			Content: "Waiting for response...",
 		},
 	})
 

@@ -23,6 +23,11 @@ type AcceptCommand struct {
 }
 
 func (c *AcceptCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreate) error {
+	var err error
+
+	database, commitOrRollback := c.Database.Tx()
+	defer commitOrRollback(&err)
+
 	interaction, err := FromDiscordInteraction(s, i)
 	if err != nil {
 		return fmt.Errorf("cannot create interaction: %w", err)
@@ -35,7 +40,7 @@ func (c *AcceptCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 		)
 	}
 
-	_, err = c.Database.CreateOrGetUser(i.Member.User.Username, i.Member.User.ID)
+	_, err = database.CreateOrGetUser(i.Member.User.Username, i.Member.User.ID)
 	if err != nil {
 		return fmt.Errorf("cannot create or get an user: %w", err)
 	}
@@ -49,7 +54,7 @@ func (c *AcceptCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 
 	mapCreator := getUserFromOption(s, i, "user")
 
-	m, err := c.Database.GetLastUploadedMap(mapCreator.ID)
+	m, err := database.GetLastUploadedMap(mapCreator.ID)
 
 	if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
 		return interaction.SendMessage(
@@ -82,19 +87,68 @@ func (c *AcceptCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 		return fmt.Errorf("cannot create discord channel: %w", err)
 	}
 
-	testingChannel, err := c.Database.CreateTestingChannel(discordChannel.ID, channelName)
+	// https://discord.com/developers/docs/topics/permissions#permissions-bitwise-permission-flags
+	// https://discord.com/developers/docs/topics/permissions#permissions
+	// https://stackoverflow.com/a/60093794/10300644
+	guildRoles, err := s.GuildRoles(config.CONFIG.GuildID)
+	if err != nil {
+		return fmt.Errorf("cannot get guild roles: %w", err)
+	}
+
+	everyoneRole := helpers.GetFromArr(guildRoles, func(r *discordgo.Role) bool {
+		return r.Name == "@everyone"
+	})
+
+	if everyoneRole == nil {
+		return fmt.Errorf("cannot get 'everyone' role")
+	}
+
+	everyoneRoleID := (*everyoneRole).ID
+
+	_, err = s.ChannelEdit(discordChannel.ID, &discordgo.ChannelEdit{
+		Name:                          channelName,
+		Position:                      1,
+		PermissionOverwrites:          []*discordgo.PermissionOverwrite{
+			{
+				ID:    everyoneRoleID,
+				Type:  discordgo.PermissionOverwriteTypeMember,
+				Deny: discordgo.PermissionViewChannel,
+			},
+			{
+				ID:    c.BotRoles.MapAcceptor.ID,
+				Type:  discordgo.PermissionOverwriteTypeRole,
+				Allow: discordgo.PermissionViewChannel,
+			},
+			{
+				ID:    c.BotRoles.MapTester.ID,
+				Type:  discordgo.PermissionOverwriteTypeRole,
+				Allow: discordgo.PermissionViewChannel,
+			},
+			{
+				ID:    i.Member.User.ID,
+				Type:  discordgo.PermissionOverwriteTypeMember,
+				Allow: discordgo.PermissionViewChannel,
+			},
+		},
+		ParentID:                      config.CONFIG.TesterSectionChannelID,
+	})
+	if err != nil {
+		return fmt.Errorf("cannot edit discord channel: %w", err)
+	}
+
+	testingChannel, err := database.CreateTestingChannel(discordChannel.ID, channelName)
 	if err != nil {
 		return fmt.Errorf("cannot create testing channel record: %w", err)
 	}
 
-	err = c.Database.AcceptMap(m.ID, mapCreator.ID, testingChannel.ID)
+	err = database.AcceptMap(m.ID, mapCreator.ID, testingChannel.ID)
 	if err != nil {
 		_, e := s.ChannelDelete(discordChannel.ID)
 		if e != nil {
 			log.Error().Err(err).Msg("cannot delete discord channel")
 		}
 
-		e = c.Database.DeleteTestingChannel(discordChannel.ID)
+		e = database.DeleteTestingChannel(discordChannel.ID)
 		if e != nil {
 			log.Error().Err(err).Msg("cannot delete testing channel record")
 		}
@@ -108,7 +162,7 @@ func (c *AcceptCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 			Content: fmt.Sprintf(
 				"New map %s from %s!",
 				strings.Replace(m.Name, ".map", "", 1),
-				getUsername(i),
+				mentionUser(i),
 			),
 			File: &discordgo.File{
 				Name:        strings.Replace(m.Name, ".map", ".png", 1),
@@ -135,7 +189,7 @@ func (c *AcceptCommand) GetDescription() string {
 	return "Accept the map. This command will create a new testing channel"
 }
 
-func (c *AcceptCommand) ApplicationCommandCreate(s *discordgo.Session) {
+func (c *AcceptCommand) ApplicationCommandCreate(s *discordgo.Session)  {
 	applicationCommand, err := s.ApplicationCommandCreate(
 		config.CONFIG.AppID,
 		config.CONFIG.GuildID,
