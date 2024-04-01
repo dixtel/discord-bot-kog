@@ -1,2 +1,4 @@
 - [ ] show commands to user based on access level etc
 - [ ] database rollback in case of an error during command invocation
+- [ ] update database doc
+- [ ] permissions
