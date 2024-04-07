@@ -87,31 +87,18 @@ func (c *AcceptCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 		return fmt.Errorf("cannot create discord channel: %w", err)
 	}
 
-	// https://discord.com/developers/docs/topics/permissions#permissions-bitwise-permission-flags
-	// https://discord.com/developers/docs/topics/permissions#permissions
-	// https://stackoverflow.com/a/60093794/10300644
-	guildRoles, err := s.GuildRoles(config.CONFIG.GuildID)
+	everyoneRoleID, err := getEveryoneRole(s)
 	if err != nil {
-		return fmt.Errorf("cannot get guild roles: %w", err)
+		return fmt.Errorf("cannot get 'everyone role': %w", err)
 	}
-
-	everyoneRole := helpers.GetFromArr(guildRoles, func(r *discordgo.Role) bool {
-		return r.Name == "@everyone"
-	})
-
-	if everyoneRole == nil {
-		return fmt.Errorf("cannot get 'everyone' role")
-	}
-
-	everyoneRoleID := (*everyoneRole).ID
 
 	_, err = s.ChannelEdit(discordChannel.ID, &discordgo.ChannelEdit{
-		Name:                          channelName,
-		Position:                      1,
-		PermissionOverwrites:          []*discordgo.PermissionOverwrite{
+		Name:     channelName,
+		Position: 1,
+		PermissionOverwrites: []*discordgo.PermissionOverwrite{
 			{
-				ID:    everyoneRoleID,
-				Type:  discordgo.PermissionOverwriteTypeMember,
+				ID:   everyoneRoleID,
+				Type: discordgo.PermissionOverwriteTypeMember,
 				Deny: discordgo.PermissionViewChannel,
 			},
 			{
@@ -130,11 +117,28 @@ func (c *AcceptCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 				Allow: discordgo.PermissionViewChannel,
 			},
 		},
-		ParentID:                      config.CONFIG.TesterSectionChannelID,
+		ParentID: config.CONFIG.TesterSectionChannelID,
 	})
 	if err != nil {
 		return fmt.Errorf("cannot edit discord channel: %w", err)
 	}
+
+	s.ApplicationCommandEdit("", "", "", &discordgo.ApplicationCommand{
+		ID:                       everyoneRoleID,
+		ApplicationID:            "",
+		GuildID:                  "",
+		Version:                  "",
+		Type:                     0,
+		Name:                     channelName,
+		NameLocalizations:        &map[discordgo.Locale]string{},
+		DefaultPermission:        new(bool),
+		DefaultMemberPermissions: new(int64),
+		DMPermission:             new(bool),
+		NSFW:                     new(bool),
+		Description:              "",
+		DescriptionLocalizations: &map[discordgo.Locale]string{},
+		Options:                  []*discordgo.ApplicationCommandOption{},
+	})
 
 	testingChannel, err := database.CreateTestingChannel(discordChannel.ID, channelName)
 	if err != nil {
@@ -189,7 +193,7 @@ func (c *AcceptCommand) GetDescription() string {
 	return "Accept the map. This command will create a new testing channel"
 }
 
-func (c *AcceptCommand) ApplicationCommandCreate(s *discordgo.Session)  {
+func (c *AcceptCommand) ApplicationCommandCreate(s *discordgo.Session) {
 	applicationCommand, err := s.ApplicationCommandCreate(
 		config.CONFIG.AppID,
 		config.CONFIG.GuildID,

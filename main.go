@@ -67,6 +67,8 @@ func main() {
 		return
 	}
 
+	// srv := webserver.Run()
+
 	// Wait here until CTRL-C or other term signal is received.
 	log.Info().Msg("Bot is now running. Press CTRL-C to exit.")
 	sc := make(chan os.Signal, 1)
@@ -74,5 +76,12 @@ func main() {
 	<-sc
 
 	// Cleanly close down the Discord session.
-	dg.Close()
+	err = dg.Close()
+	if err != nil {
+		log.Err(err).Msg("cannot close discord bot")
+	}
+
+	// if err := srv.Shutdown(context.TODO()); err != nil {
+    //     panic(err) // failure/timeout shutting down the server gracefully
+    // }
 }

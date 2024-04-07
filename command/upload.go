@@ -94,8 +94,8 @@ func (c *UploadCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 
 	return interaction.SendMessageWithPNGImage(
 		fmt.Sprintf(
-			"New map %s from %s!", 
-			strings.Replace(attachment.Filename, ".map", "", 1), 
+			"New map %s from %s!",
+			strings.Replace(attachment.Filename, ".map", "", 1),
 			mentionUser(i),
 		),
 		InteractionMessageType_Public,
@@ -134,6 +134,25 @@ func (c *UploadCommand) ApplicationCommandCreate(s *discordgo.Session) {
 	if err != nil {
 		log.Error().Err(err).Msgf("cannot create application command: %q", c.GetName())
 	}
+
+	// everyoneRoleID, err := getEveryoneRole(s)
+	// if err != nil {
+	// 	log.Error().Err(err).Msg("cannot get 'everyone role'")
+	// }
+
+	// err = s.ApplicationCommandPermissionsEdit(config.CONFIG.AppID,
+	// 	config.CONFIG.GuildID, applicationCommand.ID, &discordgo.ApplicationCommandPermissionsList{
+	// 		Permissions: []*discordgo.ApplicationCommandPermissions{
+	// 			{
+	// 				ID:         everyoneRoleID,
+	// 				Type:       discordgo.ApplicationCommandPermissionTypeUser,
+	// 				Permission: true,
+	// 			},
+	// 		},
+	// 	})
+	// if err != nil {
+	// 	log.Error().Err(err).Msgf("cannot set permission")
+	// }
 
 	c.applicationCommand = applicationCommand
 }

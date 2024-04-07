@@ -5,6 +5,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/dixtel/dicord-bot-kog/command"
+	"github.com/dixtel/dicord-bot-kog/config"
 	"github.com/dixtel/dicord-bot-kog/helpers"
 	"github.com/dixtel/dicord-bot-kog/models"
 	"github.com/dixtel/dicord-bot-kog/roles"
@@ -41,9 +42,9 @@ func SetupCommands(s *discordgo.Session, db *models.Database, roles *roles.BotRo
 	cmds := createCommands(db, roles)
 
 	deferFunc := func() {
-		for _, cmd := range cmds {
-			cmd.ApplicationCommandDelete(s)
-		}
+		// for _, cmd := range cmds {
+		// 	cmd.ApplicationCommandDelete(s)
+		// }
 	}
 
 	s.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -74,9 +75,26 @@ func SetupCommands(s *discordgo.Session, db *models.Database, roles *roles.BotRo
 			return
 		}
 	})
-
+	
+	allApplication,  err := s.ApplicationCommands(config.CONFIG.AppID, config.CONFIG.GuildID)
+	if err != nil {
+		log.Err(err).Msg("cannot retrieve all application commands")
+		return deferFunc
+	}
+	
 	for _, cmd := range cmds {
-		cmd.ApplicationCommandCreate(s)
+		e := helpers.GetFromArr(allApplication, func(e *discordgo.ApplicationCommand) bool {
+			return e.Name == cmd.GetName()
+		})
+
+		if e != nil {
+			log.Debug().Msgf("command '%s' already exists", cmd.GetName())
+			continue
+		}
+
+		log.Debug().Msgf("command '%s' not exists", cmd.GetName())
+
+		cmd.ApplicationCommandCreate(s) // TODO: catch error
 	}
 
 	return deferFunc
