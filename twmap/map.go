@@ -62,9 +62,9 @@ func MakeScreenshot(mapSource []byte) ([]byte, error) {
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Dir = dir
 
-	_, err = cmd.Output()
+	output, err := cmd.CombinedOutput()
 	if err != nil { 
-		return nil, fmt.Errorf("cannot execute command %v: %w", args, err)
+		return nil, fmt.Errorf("cannot execute command %v: %w: %s", args, err, output)
 	}
 
 	file ,err := os.ReadFile(dir + "/input.png")

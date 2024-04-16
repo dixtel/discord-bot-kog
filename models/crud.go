@@ -181,7 +181,7 @@ func (d *Database) CreateOrGetUser(username, id string) (*User, error) {
 		Model: Model{ID: id},
 	}
 
-	res := d.DB.Preload("Roles").First(user)
+	res := d.DB.First(user)
 	if res.Error != nil && !errors.Is(res.Error, gorm.ErrRecordNotFound) {
 		return nil, fmt.Errorf("cannot get user: %w", res.Error)
 	} else if res.Error != nil && errors.Is(res.Error, gorm.ErrRecordNotFound) {

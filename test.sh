@@ -1,0 +1,1 @@
+twgpu-map-photography res/test-map/BMO.map res/test-map/mapres

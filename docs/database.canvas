@@ -1,24 +1,25 @@
 {
 	"nodes":[
-		{"id":"78b9d4ddf084f858","type":"group","x":-270,"y":-280,"width":350,"height":860,"label":"Map"},
-		{"id":"3e8edc6d30c7f337","type":"group","x":206,"y":95,"width":394,"height":274,"label":"TestingChannel"},
-		{"id":"60bbd782cdc9f57b","type":"group","x":240,"y":-580,"width":290,"height":350,"label":"Role"},
-		{"id":"9305db47222cf3c8","type":"group","x":-270,"y":-580,"width":290,"height":200,"label":"User"},
-		{"id":"32b1bb5206532310","type":"text","text":"role STRING\n- map_acceptor\n- tester","x":260,"y":-420,"width":250,"height":120},
-		{"id":"e921e1be3d501c56","type":"text","text":"user_id","x":260,"y":-560,"width":250,"height":50},
-		{"id":"2a322af6fe197955","type":"text","text":"name","x":-250,"y":-260,"width":250,"height":50},
-		{"id":"8e3fdfb83401e19d","type":"text","text":"fixed_name","x":-250,"y":-190,"width":250,"height":50},
-		{"id":"7d1f458b7a88f39c","type":"text","text":"mapper_id","x":-250,"y":-120,"width":250,"height":50},
-		{"id":"08384e81a0ca7ae8","type":"text","text":"username","x":-250,"y":-560,"width":250,"height":50},
-		{"id":"36ed8c665bc8e863","type":"text","text":"file BYTES","x":-250,"y":150,"width":250,"height":50},
-		{"id":"67d9ebd5b4404646","type":"text","text":"testing_channel_id NULLABLE\n- NULL if status is waiting_to_accept","x":-250,"y":220,"width":310,"height":127},
-		{"id":"0509f75d7a04266b","type":"text","text":"status STRING\n- waiting_to_accept\n- testing\n- accepted\n- declined\n\t","x":-250,"y":-50,"width":250,"height":180},
-		{"id":"c647cf1be2e84acb","type":"text","text":"approved_by_testers INT","x":226,"y":140,"width":284,"height":50},
-		{"id":"36a1e6860e94b1f0","type":"text","text":"declined_by_testers INT","x":226,"y":210,"width":284,"height":50}
+		{"id":"78b9d4ddf084f858","type":"group","x":-270,"y":-280,"width":450,"height":860,"label":"Map"},
+		{"id":"3e8edc6d30c7f337","type":"group","x":359,"y":391,"width":500,"height":189,"label":"TestingChannelData"},
+		{"id":"64415f83ad4d4bff","x":464,"y":-83,"width":290,"height":278,"type":"group","label":"TestingChannel"},
+		{"id":"9305db47222cf3c8","type":"group","x":-270,"y":-600,"width":290,"height":100,"label":"User"},
+		{"id":"2a322af6fe197955","type":"text","text":"name STRING","x":-250,"y":-260,"width":250,"height":50},
+		{"id":"7d1f458b7a88f39c","type":"text","text":"mapper_id STRING","x":-250,"y":-180,"width":250,"height":50},
+		{"id":"67d9ebd5b4404646","type":"text","text":"testing_channel_id STRING NULLABLE\n- NULL if status is waiting_to_accept","x":-250,"y":-97,"width":370,"height":94},
+		{"id":"afde5a7bd4e50972","x":484,"y":-63,"width":250,"height":60,"type":"text","text":"channel_id STRING"},
+		{"id":"6a3b6fddca93f383","x":484,"y":25,"width":250,"height":60,"type":"text","text":"channel_name STRING"},
+		{"id":"ea1b7c11ad34d079","x":484,"y":115,"width":250,"height":60,"type":"text","text":"data JSON"},
+		{"id":"08384e81a0ca7ae8","type":"text","text":"username","x":-250,"y":-580,"width":250,"height":50},
+		{"id":"c647cf1be2e84acb","type":"text","text":"ApprovedBy MAP<Tester ID, STRUCT>","x":379,"y":420,"width":460,"height":50},
+		{"id":"0509f75d7a04266b","type":"text","text":"status STRING\n- waiting_to_accept\n- testing\n- accepted\n- declined\n\t","x":-250,"y":25,"width":250,"height":180},
+		{"id":"36ed8c665bc8e863","type":"text","text":"file BYTES","x":-250,"y":240,"width":250,"height":50},
+		{"id":"83121494e3b9cb80","x":-250,"y":320,"width":250,"height":60,"type":"text","text":"Screenshot BYTES"},
+		{"id":"36a1e6860e94b1f0","type":"text","text":"DeclinedBy MAP<Tester ID, STRUCT>","x":379,"y":500,"width":460,"height":50}
 	],
 	"edges":[
-		{"id":"cc37290ab0bcf8d0","fromNode":"e921e1be3d501c56","fromSide":"left","toNode":"9305db47222cf3c8","toSide":"right"},
-		{"id":"2748599f4ff1e957","fromNode":"67d9ebd5b4404646","fromSide":"right","toNode":"3e8edc6d30c7f337","toSide":"left"},
-		{"id":"70401bbef7ace855","fromNode":"7d1f458b7a88f39c","fromSide":"left","toNode":"9305db47222cf3c8","toSide":"left"}
+		{"id":"70401bbef7ace855","fromNode":"7d1f458b7a88f39c","fromSide":"left","toNode":"9305db47222cf3c8","toSide":"left"},
+		{"id":"2006bbf9c3179e28","fromNode":"67d9ebd5b4404646","fromSide":"right","toNode":"afde5a7bd4e50972","toSide":"left"},
+		{"id":"2aff455778d56966","fromNode":"ea1b7c11ad34d079","fromSide":"bottom","toNode":"3e8edc6d30c7f337","toSide":"top"}
 	]
 }

@@ -65,11 +65,12 @@ func SetupCommands(s *discordgo.Session, db *models.Database, roles *roles.BotRo
 		err := (*handler).Handle(s, i)
 		if err != nil {
 			issueID := uuid.NewString()
-			helpers.SendResponse(
-				helpers.SendMessageTypeOriginator,
-				fmt.Sprintf("We encountered some issues during this command invocation. Please report this to an administrator. Issue ID %s", issueID),
-				s, i,
-			)
+
+			_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+				Content: fmt.Sprintf("We encountered some issues during this command invocation. Please report this to an administrator. Issue ID %s", issueID),
+				Flags:   discordgo.MessageFlagsEphemeral,
+			})
+
 			log.Error().Err(err).Str("issueID", issueID).Msg("cannot handle command invocation")
 
 			return

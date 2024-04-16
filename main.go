@@ -25,7 +25,6 @@ func main() {
 	err = gormDb.AutoMigrate(
 		&models.User{},
 		&models.Map{},
-		&models.Role{},
 		&models.TestingChannel{},
 	)
 	if err != nil {

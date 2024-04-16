@@ -17,30 +17,6 @@ type Model struct {
 type User struct {
 	Model
 	Username string
-	Roles    []Role
-}
-
-func (u *User) HasRole(wantedRole RoleName) bool {
-	for _, role := range u.Roles {
-		if role.Role == wantedRole {
-			return true
-		}
-	}
-	return false
-}
-
-type RoleName string
-
-var (
-	RoleName_MapAcceptor RoleName = "map_acceptor"
-	RoleName_Tester      RoleName = "tester"
-)
-
-type Role struct {
-	Model
-	UserID string
-	User   User
-	Role   RoleName
 }
 
 type MapStatus string
@@ -54,31 +30,26 @@ var (
 
 type Map struct {
 	Model
-	Name     string
-	MapperID string
-	Mapper   User
-	// NULL if status is 'waiting_to_accept'
-	TestingChannelID *string
-	// NULL if status is 'waiting_to_accept'
-	TestingChannel *TestingChannel
-	Status         MapStatus
-	File           []byte
-	Screenshot     []byte
+	Name             string
+	MapperID         string
+	Mapper           User
+	TestingChannelID *string         // NULL if status is 'waiting_to_accept'
+	TestingChannel   *TestingChannel // NULL if status is 'waiting_to_accept'
+	Status           MapStatus
+	File             []byte
+	Screenshot       []byte
 }
 
 type TestingChannelData struct {
-	// Tester ID as key
-	ApprovedBy map[string]struct{}
-	// Tester ID as key
-	DeclinedBy map[string]struct{}
+	ApprovedBy map[string]struct{} // Tester ID as key
+	DeclinedBy map[string]struct{} // Tester ID as key
 }
 
 type TestingChannel struct {
 	Model
 	ChannelID   string
 	ChannelName string
-	// TestingChannelData
-	Data string
+	Data        string // TestingChannelData
 }
 
 func (d *TestingChannelData) ToString() (string, error) {

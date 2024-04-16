@@ -1,5 +1,4 @@
 .vscode
 sqlite.db
-docs/.obsidian
-twgpu/*
+docs
 .direnv
