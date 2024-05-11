@@ -1,22 +1,21 @@
 package config
 
+import "os"
+
 type Config struct {
-	SubmitMapsChannelID    string
-	SubmitMapsChannelName  string
-	TestingChannelFormat   string
-	TesterSectionChannelID string
-	UploadRateLimit        int
-	AppID                  string
-	GuildID                string
-	Token                  string
+	SubmitMapsChannelName string
+	TestingChannelFormat  string
+	SectionName           string
+	AppID                 string
+	GuildID               string
+	Token                 string
 }
 
 var CONFIG = Config{
-	SubmitMapsChannelID:    "1220495375501230131",
-	SubmitMapsChannelName:  "submit_maps", // TODO: get channel name by id
-	AppID:                  "1220129996471795773",
-	GuildID:                "1220129359411810377",
-	TesterSectionChannelID: "1224473590989062274",
-	TestingChannelFormat:   "mapping_channel_%s",
-	Token:                  "",
+	SubmitMapsChannelName: os.Getenv("SUBMIT_MAPS_CHANNEL_NAME"),
+	AppID:                 os.Getenv("APP_ID"),
+	GuildID:               os.Getenv("GUILD_ID"),
+	SectionName:           os.Getenv("SECTION_NAME"),
+	TestingChannelFormat:  os.Getenv("TESTING_CHANNEL_FORMAT"),
+	Token:                 os.Getenv("TOKEN"),
 }

@@ -87,7 +87,7 @@ func (c *AcceptCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 		return fmt.Errorf("cannot create discord channel: %w", err)
 	}
 
-	everyoneRoleID, err := getEveryoneRole(s)
+	everyoneRoleID, err := getEveryoneSpecialUser(s)
 	if err != nil {
 		return fmt.Errorf("cannot get 'everyone role': %w", err)
 	}
