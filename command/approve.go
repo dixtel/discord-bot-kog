@@ -1,6 +1,8 @@
 package command
 
 import (
+	"fmt"
+
 	"github.com/bwmarrin/discordgo"
 	"github.com/dixtel/dicord-bot-kog/config"
 	"github.com/dixtel/dicord-bot-kog/models"
@@ -33,7 +35,7 @@ func (c *ApproveCommand) GetDescription() string {
 	return "Approve the map"
 }
 
-func (c *ApproveCommand) ApplicationCommandCreate(s *discordgo.Session) {
+func (c *ApproveCommand) ApplicationCommandCreate(s *discordgo.Session) error {
 	applicationCommand, err := s.ApplicationCommandCreate(
 		config.CONFIG.AppID,
 		config.CONFIG.GuildID,
@@ -43,10 +45,12 @@ func (c *ApproveCommand) ApplicationCommandCreate(s *discordgo.Session) {
 			Description: c.GetDescription(),
 		})
 	if err != nil {
-		log.Error().Err(err).Msgf("cannot create application command: %q", c.GetName())
+		return fmt.Errorf("cannot create application command: %q", c.GetName())
 	}
 
 	c.applicationCommand = applicationCommand
+
+	return nil
 }
 
 func (c *ApproveCommand) ApplicationCommandDelete(s *discordgo.Session) {

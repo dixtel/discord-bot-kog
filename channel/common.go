@@ -31,6 +31,19 @@ func createOrGetTextChannel(name string, s *discordgo.Session) (*discordgo.Chann
 	return ch, nil
 }
 
+func createTextChannel(name string, s *discordgo.Session) (*discordgo.Channel, error) {
+	ch, err := s.GuildChannelCreate(
+		config.CONFIG.GuildID,
+		name,
+		discordgo.ChannelTypeGuildText,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create %q text channel: %w", name, err)
+	}
+
+	return ch, nil
+}
+
 func createOrGetCategoryChannel(name string, s *discordgo.Session) (*discordgo.Channel, error) {
 	channels, err := s.GuildChannels(config.CONFIG.GuildID)
 	if err != nil {

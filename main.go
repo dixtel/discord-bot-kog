@@ -49,7 +49,7 @@ func main() {
 		return
 	}
 
-	defer bot.SetupCommands(dg, db, botRoles)()
+	defer bot.SetupBot(dg, db, botRoles)()
 
 	dg.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
 		log.Info().Msg("Bot is up!")

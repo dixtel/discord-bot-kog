@@ -17,25 +17,25 @@ func (d *Database) Tx() (*Database, func(*error)) {
 	tx := d.DB.Begin().Debug()
 
 	return &Database{
-		DB: tx,
-	}, func (err *error)  {
-		r := recover()
+			DB: tx,
+		}, func(err *error) {
+			r := recover()
 
-		if err != nil && *err != nil {
-			tx.Rollback()
-			log.Debug().Msg("rollback")
-		} else if err != nil && *err == nil {
-			tx.Commit()
-			log.Debug().Msg("commit")
-		} else {
-			tx.Commit()
-			log.Debug().Msg("commit")
-		}
+			if err != nil && *err != nil {
+				tx.Rollback()
+				log.Debug().Msg("rollback")
+			} else if err != nil && *err == nil {
+				tx.Commit()
+				log.Debug().Msg("commit")
+			} else {
+				tx.Commit()
+				log.Debug().Msg("commit")
+			}
 
-		if r != nil {
-			panic(r)
+			if r != nil {
+				panic(r)
+			}
 		}
-	}
 }
 
 func (d *Database) UserHasUnacceptedMap(userID string) (bool, error) {
@@ -58,7 +58,7 @@ func (d *Database) UserHasUnacceptedMap(userID string) (bool, error) {
 }
 
 func (d *Database) UserCanUpdateMap(userID string, channelID string) (bool, error) {
-	m := &Map{} 
+	m := &Map{}
 	res := d.DB.
 		Order("created_at DESC").
 		Where(&Map{
@@ -73,8 +73,7 @@ func (d *Database) UserCanUpdateMap(userID string, channelID string) (bool, erro
 		return false, res.Error
 	}
 
-
-	return (m.Status == MapStatus_Testing) && (m.TestingChannelID != nil) && (*m.TestingChannelID == channelID), nil 
+	return (m.Status == MapStatus_Accepted) && (m.TestingChannelID != nil) && (*m.TestingChannelID == channelID), nil
 }
 
 func (d *Database) IsTestingChannel(channelID string) (bool, error) {
@@ -99,7 +98,7 @@ func (d *Database) IsTestingChannel(channelID string) (bool, error) {
 func (d *Database) CreateMap(name string, mapperID string, file []byte, screenshot []byte) (*Map, error) {
 	m := &Map{
 		Model:            Model{ID: uuid.NewString()},
-		Name:             name,
+		FileName:         name,
 		MapperID:         mapperID,
 		TestingChannelID: nil,
 		Status:           MapStatus_WaitingToAccept,
@@ -152,17 +151,26 @@ func (d *Database) AcceptMap(mapID string, mapperID string, testingChannelID str
 			MapperID: mapperID,
 		}).
 		Updates(&Map{
-			Status:           MapStatus_Testing,
+			Status:           MapStatus_Accepted,
 			TestingChannelID: &testingChannelID,
+		}).Error
+}
+
+func (d *Database) RejectMap(mapID string, mapperID string, testingChannelID string) error {
+	return d.DB.Model(&Map{}).
+		Where(&Map{
+			Model:    Model{ID: mapID},
+			MapperID: mapperID,
+		}).
+		Updates(&Map{
+			Status: MapStatus_Rejected,
 		}).Error
 }
 
 func (d *Database) MapExists(name string) (bool, error) {
 	record := &Map{}
 	res := d.DB.
-		Where(&Map{
-			Name: name,
-		}).
+		Where("file_name = ? AND status IN (?, ?, ?)", name, MapStatus_Accepted, MapStatus_Approved, MapStatus_WaitingToAccept).
 		First(record)
 
 	if errors.Is(res.Error, gorm.ErrRecordNotFound) {

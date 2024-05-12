@@ -23,14 +23,15 @@ type MapStatus string
 
 var (
 	MapStatus_WaitingToAccept MapStatus = "waiting_to_accept"
-	MapStatus_Testing         MapStatus = "testing"
 	MapStatus_Accepted        MapStatus = "accepted"
+	MapStatus_Rejected        MapStatus = "rejected"
+	MapStatus_Approved        MapStatus = "approved"
 	MapStatus_Declined        MapStatus = "declined"
 )
 
 type Map struct {
 	Model
-	Name             string
+	FileName             string
 	MapperID         string
 	Mapper           User
 	TestingChannelID *string         // NULL if status is 'waiting_to_accept'

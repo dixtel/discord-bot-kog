@@ -8,20 +8,25 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
-	"strings"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
-var FIXED_MAP_NAME_REGEX = regexp.MustCompile(`[a-zA-Z_\-0-9]`)
 var VALID_MAP_FILE_NAME = regexp.MustCompile(`^[a-zA-Z_\-0-9]+\.map$`)
 
-func IsMapNameValid(filename string) bool {
+func IsValidMapFileName(filename string) bool {
 	return VALID_MAP_FILE_NAME.Match([]byte(filename))
 }
 
-func FixMapName(filename string) string {
-	return strings.Replace(filename, ".map", "", 1)
+func RemoveMapFileExtension(filename string) string {
+	if filename[len(filename)-4:] == ".map" {
+		return filename[:len(filename)-4]
+	}
+
+	log.Warn().Str("filename", filename).Msg("this should not happen")
+
+	return filename
 }
 
 func DownloadMapFromDiscord(mapUrl string) ([]byte, error) {
@@ -41,34 +46,34 @@ func DownloadMapFromDiscord(mapUrl string) ([]byte, error) {
 
 func MakeScreenshot(mapSource []byte) ([]byte, error) {
 	dir := fmt.Sprintf("/tmp/%s", uuid.New().String())
-	
+
 	err := os.Mkdir(dir, os.ModePerm)
 	if err != nil {
 		return nil, fmt.Errorf("cannot crate temp directory: %w", err)
 	}
 
-	err = saveFile(mapSource, dir + "/input.map")
-	if err != nil { 
+	err = saveFile(mapSource, dir+"/input.map")
+	if err != nil {
 		return nil, fmt.Errorf("cannot download map %w", err)
 	}
-	
+
 	currDir, err := os.Getwd()
-	if err != nil { 
+	if err != nil {
 		return nil, fmt.Errorf("cannot get working directory %w", err)
 	}
 
 	args := []string{"twgpu-map-photography", "input.map", currDir + "/res/test-map/mapres"}
-	
+
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Dir = dir
 
 	output, err := cmd.CombinedOutput()
-	if err != nil { 
+	if err != nil {
 		return nil, fmt.Errorf("cannot execute command %v: %w: %s", args, err, output)
 	}
 
-	file ,err := os.ReadFile(dir + "/input.png")
-	if err != nil { 
+	file, err := os.ReadFile(dir + "/input.png")
+	if err != nil {
 		return nil, fmt.Errorf("cannot read screenshot file %w", err)
 	}
 
@@ -77,10 +82,10 @@ func MakeScreenshot(mapSource []byte) ([]byte, error) {
 
 func saveFile(source []byte, path string) error {
 	out, err := os.Create(path)
-	if err != nil { 
-		return  fmt.Errorf("cannot create file: %w", err)
+	if err != nil {
+		return fmt.Errorf("cannot create file: %w", err)
 	}
-	
+
 	defer out.Close()
 
 	_, err = io.Copy(out, bytes.NewReader(source))

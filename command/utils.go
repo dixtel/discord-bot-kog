@@ -101,7 +101,7 @@ func approveOrDecline(
 		return fmt.Errorf("cannot get last uploaded map by channel id: %w", err)
 	}
 
-	if m.Status != models.MapStatus_Testing {
+	if m.Status != models.MapStatus_Accepted {
 		return interaction.SendMessage(
 			fmt.Sprintf("Cannot %s the map. Current map status is %q.", action, m.Status),
 			InteractionMessageType_Private,
@@ -140,7 +140,7 @@ func approveOrDecline(
 
 	return interaction.SendMessage(
 		fmt.Sprintf(
-			"Map was %sd by tester %s. (%v approvals / %v declines)",
+			"Map was %sd by %s. (%v approvals / %v declines)",
 			action, mentionUser(i), len(data.ApprovedBy), len(data.DeclinedBy),
 		),
 		InteractionMessageType_Public,

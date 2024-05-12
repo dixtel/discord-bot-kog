@@ -1,30 +1,26 @@
 package command
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/dixtel/dicord-bot-kog/channel"
 	"github.com/dixtel/dicord-bot-kog/config"
 	"github.com/dixtel/dicord-bot-kog/helpers"
 	"github.com/dixtel/dicord-bot-kog/models"
 	"github.com/dixtel/dicord-bot-kog/roles"
-	"github.com/dixtel/dicord-bot-kog/twmap"
 	"github.com/rs/zerolog/log"
 	"gorm.io/gorm"
 )
 
-type AcceptCommand struct {
+type RejectCommand struct {
 	applicationCommand  *discordgo.ApplicationCommand
 	Database            *models.Database
 	BotRoles            *roles.BotRoles
 	SubmitMapsChannelID string
 }
 
-func (c *AcceptCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreate) error {
+func (c *RejectCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	var err error
 
 	database, commitOrRollback := c.Database.Tx()
@@ -49,7 +45,7 @@ func (c *AcceptCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 
 	if !c.BotRoles.HasMapAcceptorRole(i.Member) {
 		return interaction.SendMessage(
-			"You don't have role 'Map Acceptor' to accept the map.",
+			"You don't have role 'Map Acceptor' to reject the map.",
 			InteractionMessageType_Private,
 		)
 	}
@@ -60,7 +56,7 @@ func (c *AcceptCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 
 	if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
 		return interaction.SendMessage(
-			"This user doesn't have any uploaded map waiting to be accepted",
+			"This user doesn't have any uploaded map waiting to be rejected",
 			InteractionMessageType_Private,
 		)
 	} else if err != nil {
@@ -77,80 +73,26 @@ func (c *AcceptCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 		)
 	}
 
-	channelName := fmt.Sprintf(
-		config.CONFIG.TestingChannelFormat,
-		twmap.RemoveMapFileExtension(m.FileName),
-	)
-
-	testingMapChannel, err := channel.CreateTestingMapChannel(s, channelName, c.BotRoles, mapCreator.ID)
+	err = database.RejectMap(m.ID, mapCreator.ID, m.ID)
 	if err != nil {
-		return fmt.Errorf("cannot create testing map channel: %w", err)
-	}
-
-	testingChannel, err := database.CreateTestingChannel(testingMapChannel.GetID(), channelName)
-	if err != nil {
-		return fmt.Errorf("cannot create testing channel record: %w", err)
-	}
-
-	err = database.AcceptMap(m.ID, mapCreator.ID, testingChannel.ID)
-	if err != nil {
-		_, e := s.ChannelDelete(testingMapChannel.GetID())
-		if e != nil {
-			log.Error().Err(err).Msg("cannot delete discord channel")
-		}
-
-		e = database.DeleteTestingChannel(testingMapChannel.GetID())
-		if e != nil {
-			log.Error().Err(err).Msg("cannot delete testing channel record")
-		}
-
-		return fmt.Errorf("cannot mark map as accepted: %w", err)
-	}
-
-	_, err = s.ChannelMessageSendComplex(
-		testingMapChannel.GetID(),
-		&discordgo.MessageSend{
-			Content: fmt.Sprintf(
-				"New map %s from %s!\n%s and %s can now /approve or /decline the map and discuss about details with the author.",
-				twmap.RemoveMapFileExtension(m.FileName),
-				mentionUser(i),
-				c.BotRoles.Mention(c.BotRoles.MapAcceptor),
-				c.BotRoles.Mention(c.BotRoles.MapTester),
-			),
-			Files: []*discordgo.File{
-				{
-					Name:        strings.Replace(m.FileName, ".map", ".png", 1),
-					ContentType: "image/png",
-					Reader:      bytes.NewReader(m.Screenshot),
-				},
-				{
-					Name:        m.FileName,
-					ContentType: "text/plain",
-					Reader:      bytes.NewReader(m.File),
-				},
-			},
-		},
-	)
-	if err != nil {
-		return fmt.Errorf("cannot send message to channel: %w", err)
+		return fmt.Errorf("cannot mark map as rejected: %w", err)
 	}
 
 	return interaction.SendMessage(
-		fmt.Sprintf("Map %s from %s was accepted for the next stage - testing 🎉",
-			twmap.RemoveMapFileExtension(m.FileName), mentionUser(i)),
-		InteractionMessageType_Public,
+		"The map was rejected",
+		InteractionMessageType_Private,
 	)
 }
 
-func (c *AcceptCommand) GetName() string {
-	return "accept"
+func (c *RejectCommand) GetName() string {
+	return "reject"
 }
 
-func (c *AcceptCommand) GetDescription() string {
-	return "Accept the map. This command will create a new testing channel"
+func (c *RejectCommand) GetDescription() string {
+	return "Reject the map."
 }
 
-func (c *AcceptCommand) ApplicationCommandCreate(s *discordgo.Session) error {
+func (c *RejectCommand) ApplicationCommandCreate(s *discordgo.Session) error {
 	applicationCommand, err := s.ApplicationCommandCreate(
 		config.CONFIG.AppID,
 		config.CONFIG.GuildID,
@@ -164,7 +106,7 @@ func (c *AcceptCommand) ApplicationCommandCreate(s *discordgo.Session) error {
 
 					Type:        discordgo.ApplicationCommandOptionUser,
 					Name:        "user",
-					Description: "Accept the user map",
+					Description: "Reject the user map",
 					Required:    true,
 				},
 			},
@@ -178,7 +120,7 @@ func (c *AcceptCommand) ApplicationCommandCreate(s *discordgo.Session) error {
 	return nil
 }
 
-func (c *AcceptCommand) ApplicationCommandDelete(s *discordgo.Session) {
+func (c *RejectCommand) ApplicationCommandDelete(s *discordgo.Session) {
 	log := log.With().Str("command-name", c.GetName()).Logger()
 
 	// TODO: the errors here can be handled one level higher

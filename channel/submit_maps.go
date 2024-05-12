@@ -5,7 +5,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/dixtel/dicord-bot-kog/config"
-	"github.com/dixtel/dicord-bot-kog/helpers"
+	"github.com/dixtel/dicord-bot-kog/roles"
 )
 
 type SubmitMapChannel struct {
@@ -13,41 +13,62 @@ type SubmitMapChannel struct {
 	category *discordgo.Channel
 	pos      int
 	s        *discordgo.Session
+	roles    *roles.BotRoles
 }
 
-func CreateSubmitMapChannel(s *discordgo.Session) (*SubmitMapChannel, error) {
+func CreateOrGetSubmitMapChannel(s *discordgo.Session, roles *roles.BotRoles) (*SubmitMapChannel, error) {
 	ch, err := createOrGetTextChannel(config.CONFIG.SubmitMapsChannelName, s)
 	if err != nil {
-		return nil, fmt.Errorf("cannot crate or get channel: %w", err)
+		return nil, fmt.Errorf("cannot create or get channel: %w", err)
 	}
 
 	category, err := createOrGetCategoryChannel(config.CONFIG.SectionName, s)
 	if err != nil {
-		return nil, fmt.Errorf("cannot crate or get channel: %w", err)
+		return nil, fmt.Errorf("cannot create or get channel: %w", err)
 	}
 
-	return &SubmitMapChannel{raw: ch, s: s, category: category, pos: 0}, nil
+	self := &SubmitMapChannel{raw: ch, s: s, category: category, pos: 0, roles: roles}
+
+	err = self.UpdateChannel()
+	if err != nil {
+		return nil, fmt.Errorf("cannot update channel: %w", err)
+	}
+
+	s.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
+		if m.ChannelID != self.GetID() {
+			return
+		}
+
+		if m.Author.Bot {
+			return
+		}
+
+		if len(m.Content) != 0 {
+			s.ChannelMessageDelete(m.ChannelID, m.ID)
+		}
+	})
+
+	return self, nil
+}
+
+func (ch *SubmitMapChannel) GetID() string {
+	return ch.raw.ID
 }
 
 func (ch *SubmitMapChannel) UpdateChannel() error {
-	everyoneRoleID, err := helpers.GetEveryoneRole(ch.s)
-	if err != nil {
-		return fmt.Errorf("cannot get '@everyone' role")
-	}
-
 	updatedChannel, err := ch.s.ChannelEdit(ch.raw.ID, &discordgo.ChannelEdit{
 		Name:     ch.raw.Name,
 		Position: ch.pos,
 		ParentID: ch.category.ID,
 		PermissionOverwrites: []*discordgo.PermissionOverwrite{
 			{
-				ID:   everyoneRoleID,
+				ID:   ch.roles.EveryoneRoleID,
 				Type: discordgo.PermissionOverwriteTypeRole,
 				Deny: (1 << 50) - 1,
 				Allow: discordgo.PermissionAddReactions |
 					discordgo.PermissionViewChannel |
-					discordgo.PermissionViewChannel |
 					discordgo.PermissionSendMessages |
+					discordgo.PermissionReadMessageHistory |
 					discordgo.PermissionAttachFiles |
 					discordgo.PermissionUseSlashCommands,
 			},

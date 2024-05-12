@@ -1,6 +1,7 @@
 package command
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 
@@ -13,9 +14,10 @@ import (
 )
 
 type UploadCommand struct {
-	applicationCommand *discordgo.ApplicationCommand
-	Database           *models.Database
-	BotRoles           *roles.BotRoles
+	applicationCommand  *discordgo.ApplicationCommand
+	Database            *models.Database
+	BotRoles            *roles.BotRoles
+	SubmitMapsChannelID string
 }
 
 func (c *UploadCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreate) error {
@@ -29,7 +31,7 @@ func (c *UploadCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 		return fmt.Errorf("cannot create interaction: %w", err)
 	}
 
-	if i.ChannelID != config.CONFIG.SubmitMapsChannelID {
+	if i.ChannelID != c.SubmitMapsChannelID {
 		return interaction.SendMessage(
 			fmt.Sprintf("This command can be used only in %s channel", config.CONFIG.SubmitMapsChannelName),
 			InteractionMessageType_Private,
@@ -58,9 +60,9 @@ func (c *UploadCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 		return fmt.Errorf("cannot get attachment")
 	}
 
-	if !twmap.IsMapNameValid(attachment.Filename) {
+	if !twmap.IsValidMapFileName(attachment.Filename) {
 		return interaction.SendMessage(
-			"Incorrect map filename. Should be in format 'abc_1-2.map'",
+			"Incorrect map filename.",
 			InteractionMessageType_Private,
 		)
 	}
@@ -92,16 +94,31 @@ func (c *UploadCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 		return fmt.Errorf("cannot create map %w", err)
 	}
 
-	return interaction.SendMessageWithPNGImage(
-		fmt.Sprintf(
+	_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+		Content: fmt.Sprintf(
 			"New map %s from %s!",
 			strings.Replace(attachment.Filename, ".map", "", 1),
 			mentionUser(i),
 		),
-		InteractionMessageType_Public,
-		strings.Replace(attachment.Filename, ".map", ".png", 1),
-		screenshotSource,
-	)
+		Flags:   0,
+		Files: []*discordgo.File{
+			{
+				Name:        strings.Replace(attachment.Filename, ".map", ".png", 1),
+				ContentType: "image/png",
+				Reader:      bytes.NewReader(screenshotSource),
+			},
+			{
+				Name:        attachment.Filename,
+				ContentType: "text/plain",
+				Reader:      bytes.NewReader(mapSource),
+			},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("cannot send follow up message: %w", err)
+	}
+
+	return nil
 }
 
 func (c *UploadCommand) GetName() string {
@@ -112,7 +129,7 @@ func (c *UploadCommand) GetDescription() string {
 	return "Upload a new map"
 }
 
-func (c *UploadCommand) ApplicationCommandCreate(s *discordgo.Session) {
+func (c *UploadCommand) ApplicationCommandCreate(s *discordgo.Session) error {
 	applicationCommand, err := s.ApplicationCommandCreate(
 		config.CONFIG.AppID,
 		config.CONFIG.GuildID,
@@ -132,29 +149,12 @@ func (c *UploadCommand) ApplicationCommandCreate(s *discordgo.Session) {
 			},
 		})
 	if err != nil {
-		log.Error().Err(err).Msgf("cannot create application command: %q", c.GetName())
+		return fmt.Errorf("cannot create application command: %q", c.GetName())
 	}
 
-	// everyoneRoleID, err := getEveryoneRole(s)
-	// if err != nil {
-	// 	log.Error().Err(err).Msg("cannot get 'everyone role'")
-	// }
-
-	// err = s.ApplicationCommandPermissionsEdit(config.CONFIG.AppID,
-	// 	config.CONFIG.GuildID, applicationCommand.ID, &discordgo.ApplicationCommandPermissionsList{
-	// 		Permissions: []*discordgo.ApplicationCommandPermissions{
-	// 			{
-	// 				ID:         everyoneRoleID,
-	// 				Type:       discordgo.ApplicationCommandPermissionTypeUser,
-	// 				Permission: true,
-	// 			},
-	// 		},
-	// 	})
-	// if err != nil {
-	// 	log.Error().Err(err).Msgf("cannot set permission")
-	// }
-
 	c.applicationCommand = applicationCommand
+
+	return nil
 }
 
 func (c *UploadCommand) ApplicationCommandDelete(s *discordgo.Session) {

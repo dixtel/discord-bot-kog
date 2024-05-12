@@ -1,6 +1,7 @@
 package command
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 
@@ -63,16 +64,16 @@ func (c *UpdateCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 		return fmt.Errorf("cannot get last uploaded map: %w", err)
 	}
 
-	if m.Status != models.MapStatus_Testing {
+	if m.Status != models.MapStatus_Accepted {
 		return interaction.SendMessage(
 			fmt.Sprintf("Cannot update the map. Current map status is %q.", m.Status),
 			InteractionMessageType_Private,
 		)
 	}
 
-	if m.Name != attachment.Filename {
+	if m.FileName != attachment.Filename {
 		return interaction.SendMessage(
-			fmt.Sprintf("Your map file should be named %q instead of %q", m.Name, attachment.Filename),
+			fmt.Sprintf("Your map file should be named %q instead of %q", m.FileName, attachment.Filename),
 			InteractionMessageType_Private,
 		)
 	}
@@ -102,13 +103,33 @@ func (c *UpdateCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 
 	// TODO: to show map diff we need to save previous screenshot in database
 
-
-	return interaction.SendMessageWithPNGImage(
-		fmt.Sprintf("Map %s was updated by %s", strings.Replace(attachment.Filename, ".map", "", 1), mentionUser(i)),
-		InteractionMessageType_Private,
-		strings.Replace(attachment.Filename, ".map", ".png", 1),
-		screenshotSource,
+	_, err = s.ChannelMessageSendComplex(
+		i.ChannelID,
+		&discordgo.MessageSend{
+			Content: fmt.Sprintf(
+				"%s %s, map was updated 😉",
+				c.BotRoles.Mention(c.BotRoles.MapAcceptor),
+				c.BotRoles.Mention(c.BotRoles.MapTester),
+			),
+			Files: []*discordgo.File{
+				{
+					Name:        strings.Replace(m.FileName, ".map", ".png", 1),
+					ContentType: "image/png",
+					Reader:      bytes.NewReader(screenshotSource),
+				},
+				{
+					Name:        m.FileName,
+					ContentType: "text/plain",
+					Reader:      bytes.NewReader(mapSource),
+				},
+			},
+		},
 	)
+	if err != nil {
+		return fmt.Errorf("cannot send message to channel: %w", err)
+	}
+
+	return nil
 }
 
 func (c *UpdateCommand) GetName() string {
@@ -119,7 +140,7 @@ func (c *UpdateCommand) GetDescription() string {
 	return "Submit an updated map"
 }
 
-func (c *UpdateCommand) ApplicationCommandCreate(s *discordgo.Session) {
+func (c *UpdateCommand) ApplicationCommandCreate(s *discordgo.Session) error {
 	applicationCommand, err := s.ApplicationCommandCreate(
 		config.CONFIG.AppID,
 		config.CONFIG.GuildID,
@@ -139,10 +160,12 @@ func (c *UpdateCommand) ApplicationCommandCreate(s *discordgo.Session) {
 			},
 		})
 	if err != nil {
-		log.Error().Err(err).Msgf("cannot create application command: %q", c.GetName())
+		return fmt.Errorf("cannot create application command: %q", c.GetName())
 	}
 
 	c.applicationCommand = applicationCommand
+
+	return nil
 }
 
 func (c *UpdateCommand) ApplicationCommandDelete(s *discordgo.Session) {

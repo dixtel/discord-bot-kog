@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/dixtel/dicord-bot-kog/channel"
 	"github.com/dixtel/dicord-bot-kog/command"
 	"github.com/dixtel/dicord-bot-kog/config"
 	"github.com/dixtel/dicord-bot-kog/helpers"
@@ -13,15 +14,26 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func createCommands(db *models.Database, roles *roles.BotRoles) []command.CommandInterface {
+func createCommands(
+	db *models.Database,
+	roles *roles.BotRoles,
+	submitMapsChannelID string,
+) []command.CommandInterface {
 	return []command.CommandInterface{
 		&command.UploadCommand{
-			Database: db,
-			BotRoles: roles,
+			Database:            db,
+			BotRoles:            roles,
+			SubmitMapsChannelID: submitMapsChannelID,
 		},
 		&command.AcceptCommand{
-			Database: db,
-			BotRoles: roles,
+			Database:            db,
+			BotRoles:            roles,
+			SubmitMapsChannelID: submitMapsChannelID,
+		},
+		&command.RejectCommand{
+			Database:            db,
+			BotRoles:            roles,
+			SubmitMapsChannelID: submitMapsChannelID,
 		},
 		&command.UpdateCommand{
 			Database: db,
@@ -38,13 +50,19 @@ func createCommands(db *models.Database, roles *roles.BotRoles) []command.Comman
 	}
 }
 
-func SetupCommands(s *discordgo.Session, db *models.Database, roles *roles.BotRoles) func() {
-	cmds := createCommands(db, roles)
+func SetupBot(s *discordgo.Session, db *models.Database, roles *roles.BotRoles) func() {
+	submitChannel, err := channel.CreateOrGetSubmitMapChannel(s, roles)
+	if err != nil {
+		log.Err(err).Msg("cannot create submit channel")
+		return func() {}
+	}
+
+	cmds := createCommands(db, roles, submitChannel.GetID())
 
 	deferFunc := func() {
-		// for _, cmd := range cmds {
-		// 	cmd.ApplicationCommandDelete(s)
-		// }
+		for _, cmd := range cmds {
+			cmd.ApplicationCommandDelete(s)
+		}
 	}
 
 	s.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -76,13 +94,13 @@ func SetupCommands(s *discordgo.Session, db *models.Database, roles *roles.BotRo
 			return
 		}
 	})
-	
-	allApplication,  err := s.ApplicationCommands(config.CONFIG.AppID, config.CONFIG.GuildID)
+
+	allApplication, err := s.ApplicationCommands(config.CONFIG.AppID, config.CONFIG.GuildID)
 	if err != nil {
 		log.Err(err).Msg("cannot retrieve all application commands")
 		return deferFunc
 	}
-	
+
 	for _, cmd := range cmds {
 		e := helpers.GetFromArr(allApplication, func(e *discordgo.ApplicationCommand) bool {
 			return e.Name == cmd.GetName()
@@ -95,7 +113,10 @@ func SetupCommands(s *discordgo.Session, db *models.Database, roles *roles.BotRo
 
 		log.Debug().Msgf("command '%s' not exists", cmd.GetName())
 
-		cmd.ApplicationCommandCreate(s) // TODO: catch error
+		err := cmd.ApplicationCommandCreate(s)
+		if err != nil {
+			return deferFunc
+		}
 	}
 
 	return deferFunc
