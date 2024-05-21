@@ -1,15 +1,19 @@
 { pkgs ? import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/refs/tags/23.11.zip") { } }:
 pkgs.mkShell {
   nativeBuildInputs = with pkgs; [
+    # backend
     go
     gopls
     rustc
     cargo
     delve
-    direnv
-    vscode.fhs
     pkg-config
     openssl
+    # others
+    direnv
+    vscode.fhs
+    go-task
+    _1password
   ];
 
   hardeningDisable = [ "fortify" ];

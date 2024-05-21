@@ -65,7 +65,7 @@ func getEveryoneRole(s *discordgo.Session) (string, error) {
 func createOrGetRole(s *discordgo.Session, name string) (*discordgo.Role, error) {
 	currentRoles, err := s.GuildRoles(config.CONFIG.GuildID)
 	if err != nil {
-		return nil, fmt.Errorf("cannot get guild roles")
+		return nil, fmt.Errorf("cannot get guild roles: %w", err)
 	}
 
 	role := helpers.GetFromArr(currentRoles, func(r *discordgo.Role) bool {
@@ -95,21 +95,21 @@ func SetupRoles(s *discordgo.Session) (*BotRoles, error) {
 
 	r, err := createOrGetRole(s, "Map Tester")
 	if err != nil {
-		return nil, fmt.Errorf("cannot create or get 'Map Tester' role")
+		return nil, fmt.Errorf("cannot create or get 'Map Tester' role: %w", err)
 	}
 
 	roles.MapTester = r
 
 	r, err = createOrGetRole(s, "Map Acceptor")
 	if err != nil {
-		return nil, fmt.Errorf("cannot create or get 'Map Acceptor' role")
+		return nil, fmt.Errorf("cannot create or get 'Map Acceptor' role: %w", err)
 	}
 
 	roles.MapAcceptor = r
 
 	id, err := getEveryoneRole(s)
 	if err != nil {
-		return nil, fmt.Errorf("cannot get '@everyone' role")
+		return nil, fmt.Errorf("cannot get '@everyone' role: %w", err)
 	}
 
 	roles.EveryoneRoleID = id

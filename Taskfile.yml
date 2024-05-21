@@ -1,0 +1,15 @@
+version: "3"
+
+tasks:
+  run-dev:
+    cmds:
+      - cd front/discord-kog-bot-frontend && npm run lint && npm run format && npm run build
+      - go run .
+    env:
+      SUBMIT_MAPS_CHANNEL_NAME: submit_maps
+      SECTION_NAME: tester_section
+      TESTING_CHANNEL_FORMAT: mapping_channel_%s
+      APP_ID: 1220129996471795773
+      GUILD_ID: 1220129359411810377
+      TOKEN:
+          sh: op read op://KoG/TOKEN/credential
