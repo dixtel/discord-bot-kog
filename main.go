@@ -51,6 +51,14 @@ func main() {
 
 	defer bot.SetupBot(dg, db, botRoles)()
 
+	cleanup, err := bot.SetupBotV2(dg, db, botRoles)
+	if err != nil {
+		log.Error().Err(err).Msg("cannot setup bot v2")
+		return
+	}
+	defer cleanup()
+
+
 	dg.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
 		log.Info().Msg("Bot is up!")
 	})

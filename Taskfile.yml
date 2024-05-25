@@ -3,7 +3,7 @@ version: "3"
 tasks:
   run-dev:
     cmds:
-      - cd front/discord-kog-bot-frontend && npm run lint && npm run format && npm run build
+      # - cd front/discord-kog-bot-frontend && npm run lint && npm run format && npm run build
       - go run .
     env:
       SUBMIT_MAPS_CHANNEL_NAME: submit_maps

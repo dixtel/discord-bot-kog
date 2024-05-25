@@ -156,6 +156,16 @@ func (d *Database) AcceptMap(mapID string, mapperID string, testingChannelID str
 		}).Error
 }
 
+func (d *Database) ApproveMap(mapID string) error {
+	return d.DB.Model(&Map{}).
+		Where(&Map{
+			Model:    Model{ID: mapID},
+		}).
+		Updates(&Map{
+			Status:           MapStatus_Approved,
+		}).Error
+}
+
 func (d *Database) RejectMap(mapID string, mapperID string, testingChannelID string) error {
 	return d.DB.Model(&Map{}).
 		Where(&Map{

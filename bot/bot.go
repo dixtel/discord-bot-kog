@@ -6,6 +6,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/dixtel/dicord-bot-kog/channel"
 	"github.com/dixtel/dicord-bot-kog/command"
+	v2command "github.com/dixtel/dicord-bot-kog/command/v2"
 	"github.com/dixtel/dicord-bot-kog/config"
 	"github.com/dixtel/dicord-bot-kog/helpers"
 	"github.com/dixtel/dicord-bot-kog/models"
@@ -80,7 +81,7 @@ func SetupBot(s *discordgo.Session, db *models.Database, roles *roles.BotRoles) 
 			return
 		}
 
-		err := (*handler).Handle(s, i)
+		err := (handler).Handle(s, i)
 		if err != nil {
 			issueID := uuid.NewString()
 
@@ -120,4 +121,19 @@ func SetupBot(s *discordgo.Session, db *models.Database, roles *roles.BotRoles) 
 	}
 
 	return deferFunc
+}
+
+func SetupBotV2(s *discordgo.Session, db *models.Database, roles *roles.BotRoles) (cleanup func(), _ error) {
+	manager := v2command.NewCommandManager(s, db)
+
+	err := manager.AddCommands(command.ModCommand{})
+	if err != nil {
+		return nil, fmt.Errorf("cannot add commands: %w", err)
+	}
+
+	manager.Start(s)
+
+	return func() {
+		manager.Stop()
+	}, nil
 }

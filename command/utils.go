@@ -1,12 +1,17 @@
 package command
 
 import (
+	"bytes"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/dixtel/dicord-bot-kog/config"
 	"github.com/dixtel/dicord-bot-kog/helpers"
 	"github.com/dixtel/dicord-bot-kog/models"
 	"github.com/dixtel/dicord-bot-kog/roles"
+	"github.com/rs/zerolog/log"
 )
 
 func getAttachmentFromOption(i *discordgo.InteractionCreate, optionName string) *discordgo.MessageAttachment {
@@ -39,13 +44,13 @@ func getUserFromOption(s *discordgo.Session, i *discordgo.InteractionCreate, opt
 }
 
 func getUsername(i *discordgo.InteractionCreate) string {
-	if i.Member != nil && i.Member.Nick != ""  {
+	if i.Member != nil && i.Member.Nick != "" {
 		return i.Member.Nick
-	} 
+	}
 
-	if i.Member.User != nil && i.Member.User.Username != ""  {
+	if i.Member.User != nil && i.Member.User.Username != "" {
 		return i.Member.User.Username
-	} 
+	}
 
 	return "<undefined>"
 }
@@ -54,7 +59,12 @@ func mentionUser(i *discordgo.InteractionCreate) string {
 	return fmt.Sprintf("<@%s>", i.Member.User.ID)
 }
 
+func mentionUserByUserID(userID string) string {
+	return fmt.Sprintf("<@%s>", userID)
+}
+
 type ApproveORDecline = string
+
 var (
 	ApproveORDecline_Approve = "approve"
 	ApproveORDecline_Decline = "decline"
@@ -138,10 +148,48 @@ func approveOrDecline(
 		return fmt.Errorf("cannot update testing channel data %w", err)
 	}
 
+	if len(data.ApprovedBy)-len(data.DeclinedBy) > config.CONFIG.MinimumMapApprovalsNumber {
+		err := database.ApproveMap(m.ID)
+		if err != nil {
+			return fmt.Errorf("cannot mark map as approved %w", err)
+		}
+
+		_, err = s.ChannelMessageSendComplex(i.ChannelID, &discordgo.MessageSend{
+			Content: "Map from %s was successfully approved by testers 🕺",
+			File: &discordgo.File{
+				Name:        strings.Replace(string(m.FileName), ".map", ".png", 1),
+				ContentType: "image.png",
+				Reader:      bytes.NewReader(m.Screenshot),
+			},
+		})
+		if err != nil {
+			log.Error().Err(err).Msgf("cannot send follow up message")
+		}
+
+		go func() {
+			time.Sleep(time.Hour * 24)
+
+			_, err := s.ChannelDelete(i.ChannelID)
+			if err != nil {
+				log.Error().Err(err).Msgf("cannot remove channel %q after approval", i.ChannelID)
+			}
+		}()
+
+		return interaction.SendMessage(
+			fmt.Sprintf(
+				"Map was successfully approved by testers! Congratulation %s 🎉 \nThis channel will be removed soon automatically",
+				mentionUserByUserID(m.Mapper.ID),
+			),
+			InteractionMessageType_Public,
+		)
+	}
+
+	approvalsRemaining := (config.CONFIG.MinimumMapApprovalsNumber + 1) - (len(data.ApprovedBy) - len(data.DeclinedBy))
+
 	return interaction.SendMessage(
 		fmt.Sprintf(
-			"Map was %sd by %s. (%v approvals / %v declines)",
-			action, mentionUser(i), len(data.ApprovedBy), len(data.DeclinedBy),
+			"Map was %sd by %s. Need %v approvals to accept this map. (%v current approvals / %v current declines)",
+			action, mentionUser(i), approvalsRemaining, len(data.ApprovedBy), len(data.DeclinedBy),
 		),
 		InteractionMessageType_Public,
 	)
