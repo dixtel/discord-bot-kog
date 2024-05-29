@@ -26,11 +26,6 @@ func createCommands(
 			BotRoles:            roles,
 			SubmitMapsChannelID: submitMapsChannelID,
 		},
-		&command.AcceptCommand{
-			Database:            db,
-			BotRoles:            roles,
-			SubmitMapsChannelID: submitMapsChannelID,
-		},
 		&command.RejectCommand{
 			Database:            db,
 			BotRoles:            roles,
@@ -40,25 +35,17 @@ func createCommands(
 			Database: db,
 			BotRoles: roles,
 		},
-		&command.ApproveCommand{
-			Database: db,
-			BotRoles: roles,
-		},
-		&command.DeclineCommand{
-			Database: db,
-			BotRoles: roles,
-		},
 	}
 }
 
-func SetupBot(s *discordgo.Session, db *models.Database, roles *roles.BotRoles) func() {
-	submitChannel, err := channel.CreateOrGetSubmitMapChannel(s, roles)
-	if err != nil {
-		log.Err(err).Msg("cannot create submit channel")
-		return func() {}
-	}
-
-	cmds := createCommands(db, roles, submitChannel.GetID())
+func SetupBot(
+	s *discordgo.Session,
+	db *models.Database,
+	roles *roles.BotRoles,
+	channelManager *channel.ChannelManager,
+) func() {
+	submitChannelID := channelManager.GetSubmitMapChannelID()
+	cmds := createCommands(db, roles, submitChannelID)
 
 	deferFunc := func() {
 		for _, cmd := range cmds {
@@ -67,6 +54,10 @@ func SetupBot(s *discordgo.Session, db *models.Database, roles *roles.BotRoles) 
 	}
 
 	s.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+		if i.Type != discordgo.InteractionApplicationCommand {
+			return
+		}
+
 		commandName := i.ApplicationCommandData().Name
 		log := log.With().Str("command-name", commandName).Logger()
 
@@ -123,10 +114,19 @@ func SetupBot(s *discordgo.Session, db *models.Database, roles *roles.BotRoles) 
 	return deferFunc
 }
 
-func SetupBotV2(s *discordgo.Session, db *models.Database, roles *roles.BotRoles) (cleanup func(), _ error) {
-	manager := v2command.NewCommandManager(s, db)
+func SetupBotV2(
+	s *discordgo.Session,
+	db *models.Database,
+	roles *roles.BotRoles,
+	channelManager *channel.ChannelManager,
+) (cleanup func(), _ error) {
+	manager := v2command.NewCommandManager(s, db, roles, channelManager)
 
-	err := manager.AddCommands(command.ModCommand{})
+	err := manager.AddCommands(
+		command.ModCommand{},
+		command.AcceptMapCommand{},
+		command.VoteForMapCommand{},
+	)
 	if err != nil {
 		return nil, fmt.Errorf("cannot add commands: %w", err)
 	}

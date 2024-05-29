@@ -7,6 +7,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/dixtel/dicord-bot-kog/config"
+	"github.com/dixtel/dicord-bot-kog/helpers"
 	"github.com/dixtel/dicord-bot-kog/models"
 	"github.com/dixtel/dicord-bot-kog/roles"
 	"github.com/dixtel/dicord-bot-kog/twmap"
@@ -98,7 +99,7 @@ func (c *UploadCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 		Content: fmt.Sprintf(
 			"New map %s from %s!",
 			strings.Replace(attachment.Filename, ".map", "", 1),
-			mentionUser(i),
+			helpers.MentionUser(i.Member.User.ID),
 		),
 		Flags:   0,
 		Files: []*discordgo.File{

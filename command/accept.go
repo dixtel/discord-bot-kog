@@ -2,194 +2,137 @@ package command
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/dixtel/dicord-bot-kog/channel"
-	"github.com/dixtel/dicord-bot-kog/config"
+	"github.com/dixtel/dicord-bot-kog/command/middleware"
+	v2command "github.com/dixtel/dicord-bot-kog/command/v2"
 	"github.com/dixtel/dicord-bot-kog/helpers"
 	"github.com/dixtel/dicord-bot-kog/models"
 	"github.com/dixtel/dicord-bot-kog/roles"
 	"github.com/dixtel/dicord-bot-kog/twmap"
-	"github.com/rs/zerolog/log"
 	"gorm.io/gorm"
 )
 
-type AcceptCommand struct {
-	applicationCommand  *discordgo.ApplicationCommand
-	Database            *models.Database
-	BotRoles            *roles.BotRoles
-	SubmitMapsChannelID string
+var _ v2command.Command = (*AcceptMapCommand)(nil)
+
+type AcceptMapCommand struct{}
+
+func (AcceptMapCommand) Before() []middleware.CommandMiddleware {
+	return []middleware.CommandMiddleware{
+		middleware.CreateOrGetUser,
+		middleware.InsideSubmitMapsChannel,
+		middleware.UserHasMapAcceptorRole,
+	}
 }
 
-func (c *AcceptCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	var err error
+func (AcceptMapCommand) Handle(
+	ctx context.Context,
+	opt *v2command.UserChoice,
+	r *v2command.Responder,
+	s *discordgo.Session,
+	db *models.Database,
+	botRoles *roles.BotRoles,
+	channelManager *channel.ChannelManager,
+) error {
+	r.InteractionRespond().WaitForResponse()
 
-	database, commitOrRollback := c.Database.Tx()
-	defer commitOrRollback(&err)
-
-	interaction, err := FromDiscordInteraction(s, i)
-	if err != nil {
-		return fmt.Errorf("cannot create interaction: %w", err)
+	mapCreatorID, ok := opt.FromApplicationCommand().Get(AcceptMapCommand{}.GetName(), "user").(string)
+	if !ok {
+		return fmt.Errorf("user is nil")
 	}
 
-	if i.ChannelID != c.SubmitMapsChannelID {
-		return interaction.SendMessage(
-			fmt.Sprintf("This command can be used only in %s channel", config.CONFIG.SubmitMapsChannelName),
-			InteractionMessageType_Private,
-		)
-	}
-
-	_, err = database.CreateOrGetUser(i.Member.User.Username, i.Member.User.ID)
-	if err != nil {
-		return fmt.Errorf("cannot create or get an user: %w", err)
-	}
-
-	if !c.BotRoles.HasMapAcceptorRole(i.Member) {
-		return interaction.SendMessage(
-			"You don't have role 'Map Acceptor' to accept the map.",
-			InteractionMessageType_Private,
-		)
-	}
-
-	mapCreator := getUserFromOption(s, i, "user")
-
-	m, err := database.GetLastUploadedMap(mapCreator.ID)
+	m, err := db.GetLastUploadedMap(mapCreatorID)
 
 	if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
-		return interaction.SendMessage(
-			"This user doesn't have any uploaded map waiting to be accepted",
-			InteractionMessageType_Private,
+		r.InteractionRespond().Content(
+			"User %s doesn't have any uploaded map waiting to be accepted",
+			helpers.MentionUser(mapCreatorID),
 		)
+		return nil
 	} else if err != nil {
 		return fmt.Errorf("cannot get last uploaded map: %w", err)
 	}
 
 	if m.Status != models.MapStatus_WaitingToAccept {
-		return interaction.SendMessage(
-			fmt.Sprintf(
-				"This user doesn't have any uploaded map waiting to be accepted or rejected. The last map status for this user is %q.",
-				m.Status,
-			),
-			InteractionMessageType_Private,
+		r.InteractionRespond().Content(
+			"User %s doesn't have any uploaded map waiting to be accepted or rejected. The status for last map is %q",
+			helpers.MentionUser(mapCreatorID),
+			m.Status,
 		)
+		return nil
 	}
 
-	channelName := fmt.Sprintf(
-		config.CONFIG.TestingChannelFormat,
-		twmap.RemoveMapFileExtension(m.FileName),
-	)
-
-	testingMapChannel, err := channel.CreateTestingMapChannel(s, channelName, c.BotRoles, mapCreator.ID)
+	testingMapChannel, err := channelManager.CreateTestingMapChannel(m.FileName, mapCreatorID)
 	if err != nil {
 		return fmt.Errorf("cannot create testing map channel: %w", err)
 	}
 
-	testingChannel, err := database.CreateTestingChannel(testingMapChannel.GetID(), channelName)
+	_, err = db.CreateTestingChannel(testingMapChannel.GetID(), testingMapChannel.GetName())
 	if err != nil {
 		return fmt.Errorf("cannot create testing channel record: %w", err)
 	}
 
-	err = database.AcceptMap(m.ID, mapCreator.ID, testingChannel.ID)
+	err = db.AcceptMap(m.ID, mapCreatorID, testingMapChannel.GetID())
 	if err != nil {
-		_, e := s.ChannelDelete(testingMapChannel.GetID())
-		if e != nil {
-			log.Error().Err(err).Msg("cannot delete discord channel")
-		}
-
-		e = database.DeleteTestingChannel(testingMapChannel.GetID())
-		if e != nil {
-			log.Error().Err(err).Msg("cannot delete testing channel record")
-		}
-
+		_, _ = s.ChannelDelete(testingMapChannel.GetID())
+		_ = db.DeleteTestingChannel(testingMapChannel.GetID())
 		return fmt.Errorf("cannot mark map as accepted: %w", err)
 	}
 
-	_, err = s.ChannelMessageSendComplex(
+	r.MessageToChannelWithFiles(
 		testingMapChannel.GetID(),
-		&discordgo.MessageSend{
-			Content: fmt.Sprintf(
-				"New map %s from %s!\n%s and %s can now /approve or /decline the map and discuss about details with the author.",
-				twmap.RemoveMapFileExtension(m.FileName),
-				mentionUser(i),
-				c.BotRoles.Mention(c.BotRoles.MapAcceptor),
-				c.BotRoles.Mention(c.BotRoles.MapTester),
-			),
-			Files: []*discordgo.File{
-				{
-					Name:        strings.Replace(m.FileName, ".map", ".png", 1),
-					ContentType: "image/png",
-					Reader:      bytes.NewReader(m.Screenshot),
-				},
-				{
-					Name:        m.FileName,
-					ContentType: "text/plain",
-					Reader:      bytes.NewReader(m.File),
-				},
+		[]*discordgo.File{
+
+			{
+				Name:        strings.Replace(m.FileName, ".map", ".png", 1),
+				ContentType: "image/png",
+				Reader:      bytes.NewReader(m.Screenshot),
+			},
+			{
+				Name:        m.FileName,
+				ContentType: "text/plain",
+				Reader:      bytes.NewReader(m.File),
 			},
 		},
+		"New map %s from %s!\n"+
+			"%s and %s can now /vote for the map and discuss about details with the author.\n" +
+			"Map author can update the map with command /update",
+		twmap.RemoveMapFileExtension(m.FileName),
+		helpers.MentionUser(mapCreatorID),
+		helpers.MentionRole(botRoles.MapAcceptor.ID),
+		helpers.MentionRole(botRoles.MapTester.ID),
 	)
-	if err != nil {
-		return fmt.Errorf("cannot send message to channel: %w", err)
-	}
 
-	return interaction.SendMessage(
-		fmt.Sprintf("Map %s from %s was accepted for the next stage - testing 🎉",
-			twmap.RemoveMapFileExtension(m.FileName), mentionUser(i)),
-		InteractionMessageType_Public,
+	r.InteractionRespond().Content(
+		"Map %s from %s was accepted to the next stage - testing 🎉",
+		twmap.RemoveMapFileExtension(m.FileName),
+		helpers.MentionUser(mapCreatorID),
 	)
-}
-
-func (c *AcceptCommand) GetName() string {
-	return "accept"
-}
-
-func (c *AcceptCommand) GetDescription() string {
-	return "Accept the map. This command will create a new testing channel"
-}
-
-func (c *AcceptCommand) ApplicationCommandCreate(s *discordgo.Session) error {
-	applicationCommand, err := s.ApplicationCommandCreate(
-		config.CONFIG.AppID,
-		config.CONFIG.GuildID,
-		&discordgo.ApplicationCommand{
-			Name:                     c.GetName(),
-			Type:                     discordgo.ChatApplicationCommand,
-			Description:              c.GetDescription(),
-			DefaultMemberPermissions: helpers.ToPtr(int64(0)),
-			Options: []*discordgo.ApplicationCommandOption{
-				{
-
-					Type:        discordgo.ApplicationCommandOptionUser,
-					Name:        "user",
-					Description: "Accept the user map",
-					Required:    true,
-				},
-			},
-		})
-	if err != nil {
-		return fmt.Errorf("cannot create application command: %q", c.GetName())
-	}
-
-	c.applicationCommand = applicationCommand
 
 	return nil
 }
 
-func (c *AcceptCommand) ApplicationCommandDelete(s *discordgo.Session) {
-	log := log.With().Str("command-name", c.GetName()).Logger()
+func (AcceptMapCommand) GetName() string {
+	return "accept-map"
+}
 
-	// TODO: the errors here can be handled one level higher
-
-	if c.applicationCommand == nil {
-		log.Error().Msgf("cannot delete application command: application command is nil")
-		return
-	}
-
-	err := s.ApplicationCommandDelete(config.CONFIG.AppID, config.CONFIG.GuildID, c.applicationCommand.ID)
-	if err != nil {
-		log.Error().Err(err).Msgf("cannot delete application command")
+func (AcceptMapCommand) GetApplicationCommandBlueprint() *discordgo.ApplicationCommand {
+	return &discordgo.ApplicationCommand{
+		Name:        AcceptMapCommand{}.GetName(),
+		Description: AcceptMapCommand{}.GetName(),
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+		
+				Type:        discordgo.ApplicationCommandOptionUser,
+				Name:        "user",
+				Description: "Map Creator",
+				Required:    true,
+			},
+		},
 	}
 }

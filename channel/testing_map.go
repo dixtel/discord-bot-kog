@@ -6,9 +6,10 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/dixtel/dicord-bot-kog/config"
 	"github.com/dixtel/dicord-bot-kog/roles"
+	"github.com/dixtel/dicord-bot-kog/twmap"
 )
 
-type TestingMapChannel struct {
+type testingMapChannel struct {
 	raw          *discordgo.Channel
 	category     *discordgo.Channel
 	pos          int
@@ -17,15 +18,20 @@ type TestingMapChannel struct {
 	mapCreatorID string
 }
 
-func CreateTestingMapChannel(
+func createTestingMapChannel(
 	s *discordgo.Session,
-	channelName string,
+	mapFilename string,
 	roles *roles.BotRoles,
 	mapCreatorID string,
 ) (
-	*TestingMapChannel,
+	*testingMapChannel,
 	error,
 ) {
+	channelName := fmt.Sprintf(
+		config.CONFIG.TestingChannelFormat,
+		twmap.RemoveMapFileExtension(mapFilename),
+	)
+	
 	ch, err := createTextChannel(channelName, s)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create: %w", err)
@@ -36,7 +42,7 @@ func CreateTestingMapChannel(
 		return nil, fmt.Errorf("cannot create or get channel: %w", err)
 	}
 
-	self := &TestingMapChannel{raw: ch, s: s, category: category, pos: 1, roles: roles, mapCreatorID: mapCreatorID}
+	self := &testingMapChannel{raw: ch, s: s, category: category, pos: 1, roles: roles, mapCreatorID: mapCreatorID}
 
 	err = self.UpdateChannel()
 	if err != nil {
@@ -46,11 +52,15 @@ func CreateTestingMapChannel(
 	return self, nil
 }
 
-func (ch *TestingMapChannel) GetID() string {
+func (ch *testingMapChannel) GetName() string {
+	return ch.raw.Name
+}
+
+func (ch *testingMapChannel) GetID() string {
 	return ch.raw.ID
 }
 
-func (ch *TestingMapChannel) UpdateChannel() error {
+func (ch *testingMapChannel) UpdateChannel() error {
 	updatedChannel, err := ch.s.ChannelEdit(ch.raw.ID, &discordgo.ChannelEdit{
 		Name:     ch.raw.Name,
 		Position: ch.pos,

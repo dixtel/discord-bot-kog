@@ -8,7 +8,7 @@ import (
 	"github.com/dixtel/dicord-bot-kog/roles"
 )
 
-type SubmitMapChannel struct {
+type submitMapChannel struct {
 	raw      *discordgo.Channel
 	category *discordgo.Channel
 	pos      int
@@ -16,7 +16,7 @@ type SubmitMapChannel struct {
 	roles    *roles.BotRoles
 }
 
-func CreateOrGetSubmitMapChannel(s *discordgo.Session, roles *roles.BotRoles) (*SubmitMapChannel, error) {
+func createOrGetSubmitMapChannel(s *discordgo.Session, roles *roles.BotRoles) (*submitMapChannel, error) {
 	ch, err := createOrGetTextChannel(config.CONFIG.SubmitMapsChannelName, s)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create or get channel: %w", err)
@@ -27,7 +27,7 @@ func CreateOrGetSubmitMapChannel(s *discordgo.Session, roles *roles.BotRoles) (*
 		return nil, fmt.Errorf("cannot create or get channel: %w", err)
 	}
 
-	self := &SubmitMapChannel{raw: ch, s: s, category: category, pos: 0, roles: roles}
+	self := &submitMapChannel{raw: ch, s: s, category: category, pos: 0, roles: roles}
 
 	err = self.UpdateChannel()
 	if err != nil {
@@ -51,11 +51,11 @@ func CreateOrGetSubmitMapChannel(s *discordgo.Session, roles *roles.BotRoles) (*
 	return self, nil
 }
 
-func (ch *SubmitMapChannel) GetID() string {
+func (ch *submitMapChannel) GetID() string {
 	return ch.raw.ID
 }
 
-func (ch *SubmitMapChannel) UpdateChannel() error {
+func (ch *submitMapChannel) UpdateChannel() error {
 	updatedChannel, err := ch.s.ChannelEdit(ch.raw.ID, &discordgo.ChannelEdit{
 		Name:     ch.raw.Name,
 		Position: ch.pos,

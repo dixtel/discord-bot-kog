@@ -12,4 +12,5 @@ tasks:
       APP_ID: 1220129996471795773
       GUILD_ID: 1220129359411810377
       TOKEN:
-          sh: op read op://KoG/TOKEN/credential
+        sh: op read op://KoG/TOKEN/credential
+      MAP_FEEDBACK_CHANNEL_ID: 1245115464846282752

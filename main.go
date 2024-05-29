@@ -1,15 +1,18 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/dixtel/dicord-bot-kog/bot"
+	"github.com/dixtel/dicord-bot-kog/channel"
 	"github.com/dixtel/dicord-bot-kog/config"
 	"github.com/dixtel/dicord-bot-kog/models"
 	"github.com/dixtel/dicord-bot-kog/roles"
+	"github.com/dixtel/dicord-bot-kog/webserver"
 	"github.com/glebarez/sqlite"
 	"github.com/rs/zerolog/log"
 	"gorm.io/gorm"
@@ -26,15 +29,14 @@ func main() {
 		&models.User{},
 		&models.Map{},
 		&models.TestingChannel{},
+		&models.BannedUserFromSubmission{},
 	)
 	if err != nil {
 		log.Error().Err(err).Msg("cannot migrate models")
 		return
 	}
 
-	db := &models.Database{
-		DB: gormDb.Debug(),
-	}
+	db := models.NewDatabase(gormDb.Debug())
 
 	// Create a new Discord session using the provided bot token.
 	dg, err := discordgo.New("Bot " + config.CONFIG.Token)
@@ -49,9 +51,16 @@ func main() {
 		return
 	}
 
-	defer bot.SetupBot(dg, db, botRoles)()
+	channelManager, err := channel.NewChannelManager(dg, botRoles)
+	if err != nil {
+		log.Error().Err(err).Msg("cannot create channel manager")
+		return
+	}
 
-	cleanup, err := bot.SetupBotV2(dg, db, botRoles)
+
+	defer bot.SetupBot(dg, db, botRoles, channelManager)()
+
+	cleanup, err := bot.SetupBotV2(dg, db, botRoles, channelManager)
 	if err != nil {
 		log.Error().Err(err).Msg("cannot setup bot v2")
 		return
@@ -74,7 +83,7 @@ func main() {
 		return
 	}
 
-	// srv := webserver.Run()
+	srv := webserver.Run(dg)
 
 	// Wait here until CTRL-C or other term signal is received.
 	log.Info().Msg("Bot is now running. Press CTRL-C to exit.")
@@ -88,7 +97,7 @@ func main() {
 		log.Err(err).Msg("cannot close discord bot")
 	}
 
-	// if err := srv.Shutdown(context.TODO()); err != nil {
-    //     panic(err) // failure/timeout shutting down the server gracefully
-    // }
+	if err := srv.Shutdown(context.TODO()); err != nil {
+        panic(err) // failure/timeout shutting down the server gracefully
+    }
 }

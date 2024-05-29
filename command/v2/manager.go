@@ -6,28 +6,39 @@ import (
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/dixtel/dicord-bot-kog/channel"
 	"github.com/dixtel/dicord-bot-kog/command/middleware"
 	"github.com/dixtel/dicord-bot-kog/config"
 	"github.com/dixtel/dicord-bot-kog/helpers"
 	"github.com/dixtel/dicord-bot-kog/models"
+	"github.com/dixtel/dicord-bot-kog/roles"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
 type CommandManager struct {
-	cmds    []Command
-	rawCmds map[string]*discordgo.ApplicationCommand
-	s       *discordgo.Session
-	db      *models.Database
+	cmds           []Command
+	rawCmds        map[string]*discordgo.ApplicationCommand
+	s              *discordgo.Session
+	db             *models.Database
+	botRoles       *roles.BotRoles
+	channelManager *channel.ChannelManager
 }
 
-func NewCommandManager(s *discordgo.Session, db *models.Database) *CommandManager {
+func NewCommandManager(
+	s *discordgo.Session,
+	db *models.Database,
+	botRoles *roles.BotRoles,
+	channelManager *channel.ChannelManager,
+) *CommandManager {
 	return &CommandManager{
-		cmds:    []Command{},
-		rawCmds: map[string]*discordgo.ApplicationCommand{},
-		s:       s,
-		db:      db,
+		cmds:           []Command{},
+		rawCmds:        map[string]*discordgo.ApplicationCommand{},
+		s:              s,
+		db:             db,
+		botRoles:       botRoles,
+		channelManager: channelManager,
 	}
 }
 
@@ -44,6 +55,9 @@ func (m *CommandManager) AddCommands(cmds ...Command) error {
 }
 
 func (m *CommandManager) Start(s *discordgo.Session) {
+	modalSubmitHandler := NewModalSubmitHandler()
+	modalSubmitHandler.Start(s)
+
 	s.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if i.Interaction.Type != discordgo.InteractionApplicationCommand {
 			return
@@ -64,16 +78,22 @@ func (m *CommandManager) Start(s *discordgo.Session) {
 		}
 
 		commandCtx := context.Background()
-		responder := NewResponder(i, s)
+		responder := NewResponder(i, s, modalSubmitHandler)
 
 		for _, middlewareHandler := range command.Before() {
-			ctx, err := middlewareHandler(commandCtx, i.Interaction, m.db)
+			ctx, err := middlewareHandler(
+				commandCtx,
+				i.Interaction,
+				m.db,
+				m.botRoles,
+				m.channelManager,
+			)
 			commandCtx = ctx
 
 			if err != nil {
 				var errorWithResponseToUser *middleware.ErrorWithResponseToUser
 				if errors.As(err, &errorWithResponseToUser) {
-					responder.Message().Content(errorWithResponseToUser.MessageToUser)
+					responder.InteractionRespond().Content("⛔ %s", errorWithResponseToUser.MessageToUser)
 					return
 				}
 
@@ -86,8 +106,18 @@ func (m *CommandManager) Start(s *discordgo.Session) {
 			}
 		}
 
-		err := command.Handle(commandCtx, NewUserOption(i), responder)
+		db, commit, rollback := m.db.TxV2()
+		err := command.Handle(
+			commandCtx,
+			NewUserOption(i),
+			responder,
+			s,
+			db,
+			m.botRoles,
+			m.channelManager,
+		)
 		if err != nil {
+			rollback()
 			reportErrorToUser(
 				responder,
 				fmt.Errorf("command handler returns an error: %w", err),
@@ -95,6 +125,8 @@ func (m *CommandManager) Start(s *discordgo.Session) {
 			)
 			return
 		}
+
+		commit()
 	})
 }
 
@@ -124,6 +156,6 @@ func (m *CommandManager) createApplicationCommand(cmd Command) error {
 
 func reportErrorToUser(r *Responder, err error, event *zerolog.Event) {
 	issueID := uuid.NewString()
-	r.Message().Content(fmt.Sprintf("We encountered some issues during command invocation.\nPlease report this to an administrator.\nIssue ID %s", issueID))
+	r.InteractionRespond().Content(fmt.Sprintf("We encountered some issues during command invocation.\nPlease report this to an administrator.\nIssue ID %s", issueID))
 	event.Err(err).Str("issue-id", issueID).Msg("cannot handle command")
 }

@@ -10,14 +10,18 @@ import (
 )
 
 type Database struct {
-	DB *gorm.DB
+	db *gorm.DB
+}
+
+func NewDatabase(db *gorm.DB) *Database {
+	return &Database{db}
 }
 
 func (d *Database) Tx() (*Database, func(*error)) {
-	tx := d.DB.Begin().Debug()
+	tx := d.db.Begin().Debug()
 
 	return &Database{
-			DB: tx,
+			db: tx,
 		}, func(err *error) {
 			r := recover()
 
@@ -38,9 +42,22 @@ func (d *Database) Tx() (*Database, func(*error)) {
 		}
 }
 
+func (d *Database) TxV2() (_ *Database, commit func(), rollback func()) {
+	tx := d.db.Begin().Debug()
+
+	return &Database{
+			db: tx,
+		}, func() {
+			tx.Commit()
+		},
+		func() {
+			tx.Rollback()
+		}
+}
+
 func (d *Database) UserHasUnacceptedMap(userID string) (bool, error) {
 	m := &Map{}
-	res := d.DB.
+	res := d.db.
 		Order("created_at DESC").
 		Where(&Map{
 			MapperID: userID,
@@ -59,7 +76,7 @@ func (d *Database) UserHasUnacceptedMap(userID string) (bool, error) {
 
 func (d *Database) UserCanUpdateMap(userID string, channelID string) (bool, error) {
 	m := &Map{}
-	res := d.DB.
+	res := d.db.
 		Order("created_at DESC").
 		Where(&Map{
 			MapperID: userID,
@@ -78,7 +95,7 @@ func (d *Database) UserCanUpdateMap(userID string, channelID string) (bool, erro
 
 func (d *Database) IsTestingChannel(channelID string) (bool, error) {
 	m := &TestingChannel{}
-	res := d.DB.
+	res := d.db.
 		Order("created_at DESC").
 		Where(&TestingChannel{
 			ChannelID: channelID,
@@ -105,11 +122,11 @@ func (d *Database) CreateMap(name string, mapperID string, file []byte, screensh
 		File:             file,
 		Screenshot:       screenshot,
 	}
-	return m, d.DB.Create(m).Error
+	return m, d.db.Create(m).Error
 }
 
 func (d *Database) UpdateMap(id string, file []byte, screenshot []byte) error {
-	return d.DB.
+	return d.db.
 		Model(&Map{}).
 		Where(&Map{
 			Model: Model{ID: id},
@@ -124,7 +141,7 @@ func (d *Database) GetLastUploadedMap(mapperID string) (*Map, error) {
 	m := &Map{
 		MapperID: mapperID,
 	}
-	return m, d.DB.
+	return m, d.db.
 		Order("created_at DESC").
 		Where(&Map{
 			MapperID: mapperID,
@@ -135,7 +152,7 @@ func (d *Database) GetLastUploadedMap(mapperID string) (*Map, error) {
 
 func (d *Database) GetLastUploadedMapByChannelID(channelID string) (*Map, error) {
 	m := &Map{}
-	return m, d.DB.
+	return m, d.db.
 		Order("created_at DESC").
 		Where(&Map{
 			TestingChannelID: &channelID,
@@ -145,7 +162,7 @@ func (d *Database) GetLastUploadedMapByChannelID(channelID string) (*Map, error)
 }
 
 func (d *Database) AcceptMap(mapID string, mapperID string, testingChannelID string) error {
-	return d.DB.Model(&Map{}).
+	return d.db.Model(&Map{}).
 		Where(&Map{
 			Model:    Model{ID: mapID},
 			MapperID: mapperID,
@@ -157,17 +174,17 @@ func (d *Database) AcceptMap(mapID string, mapperID string, testingChannelID str
 }
 
 func (d *Database) ApproveMap(mapID string) error {
-	return d.DB.Model(&Map{}).
+	return d.db.Model(&Map{}).
 		Where(&Map{
-			Model:    Model{ID: mapID},
+			Model: Model{ID: mapID},
 		}).
 		Updates(&Map{
-			Status:           MapStatus_Approved,
+			Status: MapStatus_Approved,
 		}).Error
 }
 
 func (d *Database) RejectMap(mapID string, mapperID string, testingChannelID string) error {
-	return d.DB.Model(&Map{}).
+	return d.db.Model(&Map{}).
 		Where(&Map{
 			Model:    Model{ID: mapID},
 			MapperID: mapperID,
@@ -179,7 +196,7 @@ func (d *Database) RejectMap(mapID string, mapperID string, testingChannelID str
 
 func (d *Database) MapExists(name string) (bool, error) {
 	record := &Map{}
-	res := d.DB.
+	res := d.db.
 		Where("file_name = ? AND status IN (?, ?, ?)", name, MapStatus_Accepted, MapStatus_Approved, MapStatus_WaitingToAccept).
 		First(record)
 
@@ -199,12 +216,12 @@ func (d *Database) CreateOrGetUser(username, id string) (*User, error) {
 		Model: Model{ID: id},
 	}
 
-	res := d.DB.First(user)
+	res := d.db.First(user)
 	if res.Error != nil && !errors.Is(res.Error, gorm.ErrRecordNotFound) {
 		return nil, fmt.Errorf("cannot get user: %w", res.Error)
 	} else if res.Error != nil && errors.Is(res.Error, gorm.ErrRecordNotFound) {
 		user.Username = username
-		return user, d.DB.Create(user).Error
+		return user, d.db.Create(user).Error
 	}
 
 	return user, nil
@@ -225,12 +242,12 @@ func (d *Database) CreateTestingChannel(channelID string, channelName string) (*
 		ChannelName: channelName,
 		Data:        data,
 	}
-	return m, d.DB.Create(m).Error
+	return m, d.db.Create(m).Error
 }
 
 func (d *Database) GetTestingChannelData(mapID string) (*TestingChannelData, error) {
 	m := &Map{}
-	err := d.DB.
+	err := d.db.
 		Where(&Map{
 			Model: Model{ID: mapID},
 		}).
@@ -254,7 +271,7 @@ func (d *Database) GetTestingChannelData(mapID string) (*TestingChannelData, err
 
 func (d *Database) UpdateTestingChannelData(mapID string, data *TestingChannelData) error {
 	m := &Map{}
-	err := d.DB.
+	err := d.db.
 		Where(&Map{
 			Model: Model{ID: mapID},
 		}).
@@ -273,7 +290,7 @@ func (d *Database) UpdateTestingChannelData(mapID string, data *TestingChannelDa
 		return fmt.Errorf("cannot convert testing channel data to string: %w", err)
 	}
 
-	return d.DB.
+	return d.db.
 		Model(&TestingChannel{}).
 		Where(&TestingChannel{
 			Model: Model{ID: m.TestingChannel.ID},
@@ -284,7 +301,26 @@ func (d *Database) UpdateTestingChannelData(mapID string, data *TestingChannelDa
 }
 
 func (d *Database) DeleteTestingChannel(channelID string) error {
-	return d.DB.Delete(&TestingChannel{
+	return d.db.Delete(&TestingChannel{
 		Model: Model{ID: channelID},
 	}).Error
+}
+
+func (d *Database) CreateBannedUserFromSubmission(bannedUserID, reason, byUserID string) error {
+	user := &BannedUserFromSubmission{
+		BannedUserID: bannedUserID,
+		Reason:       reason,
+		ByUserID:     byUserID,
+	}
+
+	return d.db.Create(user).Error
+}
+
+func (d *Database) GetBannedUserFromSubmission(bannedUserID string) (*BannedUserFromSubmission, error) {
+	m := &BannedUserFromSubmission{}
+	return m, d.db.
+		Where(&BannedUserFromSubmission{
+			BannedUserID: bannedUserID,
+		}).
+		First(&m).Error
 }

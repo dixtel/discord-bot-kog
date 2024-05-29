@@ -4,8 +4,11 @@ import (
 	"context"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/dixtel/dicord-bot-kog/channel"
 	"github.com/dixtel/dicord-bot-kog/command/middleware"
 	"github.com/dixtel/dicord-bot-kog/helpers"
+	"github.com/dixtel/dicord-bot-kog/models"
+	"github.com/dixtel/dicord-bot-kog/roles"
 )
 
 type UserChoice struct {
@@ -57,7 +60,15 @@ func (u *userChoiceFromApplicationCommand) Get(path ...string) interface{} {
 
 type Command interface {
 	Before() []middleware.CommandMiddleware
-	Handle(context.Context, *UserChoice, *Responder) error
+	Handle(
+		context.Context,
+		*UserChoice,
+		*Responder,
+		*discordgo.Session,
+		*models.Database,
+		*roles.BotRoles,
+		*channel.ChannelManager,
+	) error
 	GetName() string
 	GetApplicationCommandBlueprint() *discordgo.ApplicationCommand
 }

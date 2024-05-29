@@ -31,7 +31,7 @@ var (
 
 type Map struct {
 	Model
-	FileName             string
+	FileName         string
 	MapperID         string
 	Mapper           User
 	TestingChannelID *string         // NULL if status is 'waiting_to_accept'
@@ -67,4 +67,11 @@ func (TestingChannelData) FromString(src string) (*TestingChannelData, error) {
 	}
 
 	return &data, nil
+}
+
+type BannedUserFromSubmission struct {
+	Model
+	BannedUserID string `gorm:"unique"`
+	Reason       string
+	ByUserID     string
 }

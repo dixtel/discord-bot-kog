@@ -9,6 +9,7 @@ import (
 type Config struct {
 	SubmitMapsChannelName     string
 	TestingChannelFormat      string
+	MapFeedbackChannelID      string
 	SectionName               string
 	AppID                     string
 	GuildID                   string
@@ -18,6 +19,7 @@ type Config struct {
 
 var CONFIG = Config{
 	SubmitMapsChannelName:     orDefaultString(os.Getenv("SUBMIT_MAPS_CHANNEL_NAME"), "submit_maps"),
+	MapFeedbackChannelID:      getEnvOrPanic("MAP_FEEDBACK_CHANNEL_ID"),
 	AppID:                     getEnvOrPanic("APP_ID"),
 	GuildID:                   getEnvOrPanic("GUILD_ID"),
 	SectionName:               orDefaultString(os.Getenv("SUBMIT_MAPS_CHANNEL_NAME"), "tester section"),
