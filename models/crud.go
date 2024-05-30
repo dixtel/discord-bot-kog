@@ -55,7 +55,7 @@ func (d *Database) TxV2() (_ *Database, commit func(), rollback func()) {
 		}
 }
 
-func (d *Database) UserHasUnacceptedMap(userID string) (bool, error) {
+func (d *Database) UserHasUnacceptedLastMap(userID string) (bool, error) {
 	m := &Map{}
 	res := d.db.
 		Order("created_at DESC").

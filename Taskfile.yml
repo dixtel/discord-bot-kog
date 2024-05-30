@@ -14,3 +14,4 @@ tasks:
       TOKEN:
         sh: op read op://KoG/TOKEN/credential
       MAP_FEEDBACK_CHANNEL_ID: 1245115464846282752
+      ENV: dev

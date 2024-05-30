@@ -33,8 +33,7 @@ type userChoiceFromApplicationCommand struct {
 	d *discordgo.ApplicationCommandInteractionData
 }
 
-
-func getOptionValue(options []*discordgo.ApplicationCommandInteractionDataOption, path ...string)  interface{} {
+func getOptionValue(options []*discordgo.ApplicationCommandInteractionDataOption, path ...string) interface{} {
 	for _, o := range options {
 		if o.Name != path[0] {
 			continue
@@ -56,6 +55,15 @@ func getOptionValue(options []*discordgo.ApplicationCommandInteractionDataOption
 
 func (u *userChoiceFromApplicationCommand) Get(path ...string) interface{} {
 	return getOptionValue(u.d.Options, path...)
+}
+
+func (u *userChoiceFromApplicationCommand) GetAttachment(path ...string) *discordgo.MessageAttachment {
+	val, ok := getOptionValue(u.d.Options, path...).(string)
+	if !ok {
+		return nil
+	}
+
+	return u.d.Resolved.Attachments[val]
 }
 
 type Command interface {

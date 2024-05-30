@@ -15,6 +15,7 @@ type Config struct {
 	GuildID                   string
 	Token                     string
 	MinimumMapApprovalsNumber int
+	Env                       string
 }
 
 var CONFIG = Config{
@@ -26,6 +27,7 @@ var CONFIG = Config{
 	TestingChannelFormat:      orDefaultString(os.Getenv("TESTING_CHANNEL_FORMAT"), "mapping_channel_%s"),
 	Token:                     getEnvOrPanic("TOKEN"),
 	MinimumMapApprovalsNumber: orDefaultInt(os.Getenv("MINIMUM_MAP_APPROVALS_NUMBER"), 3),
+	Env:                       getEnvOrPanic("ENV"),
 }
 
 func orDefaultInt(value string, def int) int {

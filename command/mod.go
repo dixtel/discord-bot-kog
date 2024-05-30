@@ -36,8 +36,6 @@ func (ModCommand) Handle(
 	botRoles *roles.BotRoles,
 	channelManager *channel.ChannelManager,
 ) error {
-	r.InteractionRespond().WaitForResponse()
-
 	invocator, ok := ctx.Value(middleware.CreateUserContext{}).(middleware.CreateUserContext)
 	if !ok {
 		return fmt.Errorf("CreateUserContext is not set")
@@ -57,7 +55,7 @@ func (ModCommand) Handle(
 		bannedUser, err := db.GetBannedUserFromSubmission(userID)
 
 		if err == nil {
-			r.InteractionRespond().Content(
+			r.InteractionRespond().PublicMessage(
 				"User %s is already banned by %s, reason: %q",
 				helpers.MentionUser(userID),
 				helpers.MentionUser(bannedUser.ByUserID),
@@ -72,7 +70,7 @@ func (ModCommand) Handle(
 			}
 
 			if botRoles.HasMapAcceptorRole(userToBan) || botRoles.HasMapTesterRole(userToBan) {
-				r.InteractionRespond().Content("Cannot ban %s, he has acceptor or tester role", helpers.MentionUser(userID))
+				r.InteractionRespond().PublicMessage("Cannot ban %s, he has acceptor or tester role", helpers.MentionUser(userID))
 				return nil
 			}
 
@@ -81,7 +79,7 @@ func (ModCommand) Handle(
 				return fmt.Errorf("cannot create banned user: %w", err)
 			}
 
-			r.InteractionRespond().Content("User %s is now banned from map submission", userID)
+			r.InteractionRespond().PublicMessage("User %s is now banned from map submission", userID)
 			return nil
 		}
 
@@ -92,7 +90,7 @@ func (ModCommand) Handle(
 			return fmt.Errorf("user is nil")
 		}
 
-		r.InteractionRespond().Content("User %s was unbanned", helpers.MentionUser(userID))
+		r.InteractionRespond().PublicMessage("User %s was unbanned", helpers.MentionUser(userID))
 
 		return nil
 	}

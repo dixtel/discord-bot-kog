@@ -58,15 +58,15 @@ func main() {
 	}
 
 
-	defer bot.SetupBot(dg, db, botRoles, channelManager)()
+	// defer bot.SetupBot(dg, db, botRoles, channelManager)()
 
-	cleanup, err := bot.SetupBotV2(dg, db, botRoles, channelManager)
+	cleanup, err := bot.SetupBot(dg, db, botRoles, channelManager)
 	if err != nil {
 		log.Error().Err(err).Msg("cannot setup bot v2")
 		return
 	}
-	defer cleanup()
 
+	defer cleanup()
 
 	dg.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
 		log.Info().Msg("Bot is up!")
@@ -90,6 +90,8 @@ func main() {
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
+
+
 
 	// Cleanly close down the Discord session.
 	err = dg.Close()

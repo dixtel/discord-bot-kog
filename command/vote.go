@@ -26,6 +26,7 @@ func (VoteForMapCommand) Before() []middleware.CommandMiddleware {
 	return []middleware.CommandMiddleware{
 		middleware.CreateOrGetUser,
 		middleware.UserIsTesterOrAcceptor,
+		middleware.InsideTestingMapChannel,
 		middleware.TestingChannelData,
 	}
 }
@@ -39,15 +40,13 @@ func (VoteForMapCommand) Handle(
 	botRoles *roles.BotRoles,
 	channelManager *channel.ChannelManager,
 ) error {
-	r.InteractionRespond().WaitForResponse()
-
 	testingChannelDataContext, ok := ctx.Value(middleware.TestingChannelDataContext{}).(middleware.TestingChannelDataContext)
 	if !ok {
 		return fmt.Errorf("TestingChannelDataContext is not set")
 	}
 
 	if testingChannelDataContext.Map.Status != models.MapStatus_Accepted {
-		r.InteractionRespond().Content("Voting for this map is disabled")
+		r.InteractionRespond().PublicMessage("Voting for this map is disabled")
 		return nil
 	}
 
@@ -82,6 +81,7 @@ func (VoteForMapCommand) voteUp(
 		return fmt.Errorf("CreateUserContext is not set")
 	}
 
+	delete(testingChannelDataContext.TestingChannelData.DeclinedBy, createUserContext.User.ID)
 	testingChannelDataContext.TestingChannelData.ApprovedBy[createUserContext.User.ID] = struct{}{}
 
 	err := db.UpdateTestingChannelData(testingChannelDataContext.Map.ID, testingChannelDataContext.TestingChannelData)
@@ -89,7 +89,7 @@ func (VoteForMapCommand) voteUp(
 		return fmt.Errorf("cannot update testing channel data %w", err)
 	}
 
-	r.InteractionRespond().Content("Up vote from %s 👍", helpers.MentionUser(createUserContext.User.ID))
+	r.InteractionRespond().PublicMessage("Up vote from %s 👍", helpers.MentionUser(createUserContext.User.ID))
 
 	return VoteForMapCommand{}.tryApproveMap(ctx, db, &testingChannelDataContext, r, channelManager, s)
 }
@@ -110,6 +110,7 @@ func (VoteForMapCommand) voteDown(
 		return fmt.Errorf("CreateUserContext is not set")
 	}
 
+	delete(testingChannelDataContext.TestingChannelData.ApprovedBy, createUserContext.User.ID)
 	testingChannelDataContext.TestingChannelData.DeclinedBy[createUserContext.User.ID] = struct{}{}
 
 	err := db.UpdateTestingChannelData(testingChannelDataContext.Map.ID, testingChannelDataContext.TestingChannelData)
@@ -117,8 +118,16 @@ func (VoteForMapCommand) voteDown(
 		return fmt.Errorf("cannot update testing channel data %w", err)
 	}
 
-	// TODO: send to channel publicly
-	r.InteractionRespond().Content("Down vote from %s 👎, reason: %s", helpers.MentionUser(createUserContext.User.ID), reason)
+	r.InteractionRespond().PublicMessage("Down vote from %s 👎, reason: %s", helpers.MentionUser(createUserContext.User.ID), reason)
+
+	approvedCounter := len(testingChannelDataContext.TestingChannelData.ApprovedBy)
+	declinedCounter := len(testingChannelDataContext.TestingChannelData.DeclinedBy)
+
+	approvalsRemaining := (config.CONFIG.MinimumMapApprovalsNumber + 1) - (approvedCounter - declinedCounter)
+	r.InteractionRespond().PublicMessage(
+		"Needs %v approvals to accept this map. (approvals %v / declines %v)",
+		approvalsRemaining, approvedCounter, declinedCounter,
+	)
 
 	return nil
 }
@@ -137,8 +146,8 @@ func (VoteForMapCommand) tryApproveMap(
 	isApproved := approvedCounter-declinedCounter > config.CONFIG.MinimumMapApprovalsNumber
 	if !isApproved {
 		approvalsRemaining := (config.CONFIG.MinimumMapApprovalsNumber + 1) - (approvedCounter - declinedCounter)
-		r.InteractionRespond().Content(
-			"Need %v approvals to accept this map. (approvals %v / declines %v)",
+		r.InteractionRespond().PublicMessage(
+			"Needs %v approvals to accept this map. (approvals %v / declines %v)",
 			approvalsRemaining, approvedCounter, declinedCounter,
 		)
 
@@ -163,7 +172,7 @@ func (VoteForMapCommand) tryApproveMap(
 		helpers.MentionUser(data.Map.MapperID),
 	)
 
-	r.InteractionRespond().Content(
+	r.InteractionRespond().PublicMessage(
 		"Map was successfully approved by testers! Congratulation %s 🎉\n"+
 			"This channel will be removed soon automatically",
 		helpers.MentionUser(data.Map.MapperID),

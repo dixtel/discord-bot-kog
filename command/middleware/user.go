@@ -45,3 +45,25 @@ var CreateOrGetUser CommandMiddleware = func(
 
 	return context.WithValue(ctx, CreateUserContext{}, CreateUserContext{user}), nil
 }
+
+var LastUserMapIsAccepted CommandMiddleware = func(
+	ctx context.Context,
+	i *discordgo.Interaction,
+	db *models.Database,
+	botRoles *roles.BotRoles,
+	_ *channel.ChannelManager,
+) (context.Context, error) {
+	userHasUnacceptedLastMap, err := db.UserHasUnacceptedLastMap(i.Member.User.ID)
+	if err != nil {
+		return nil, fmt.Errorf("cannot check if user have unaccepted map: %w", err)
+	}
+
+	if !userHasUnacceptedLastMap {
+		return ctx, nil
+	}
+
+	return nil, &ErrorWithResponseToUser{
+		MessageToUser: "You cannot upload a new map because you have another map waiting for acceptance.",
+	}
+}
+

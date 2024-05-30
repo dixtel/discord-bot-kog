@@ -18,12 +18,13 @@ import (
 )
 
 type CommandManager struct {
-	cmds           []Command
-	rawCmds        map[string]*discordgo.ApplicationCommand
-	s              *discordgo.Session
-	db             *models.Database
-	botRoles       *roles.BotRoles
-	channelManager *channel.ChannelManager
+	cmds                    []Command
+	rawCmds                 map[string]*discordgo.ApplicationCommand
+	s                       *discordgo.Session
+	db                      *models.Database
+	botRoles                *roles.BotRoles
+	channelManager          *channel.ChannelManager
+	allRawCommandsOnStartup []*discordgo.ApplicationCommand
 }
 
 func NewCommandManager(
@@ -31,15 +32,29 @@ func NewCommandManager(
 	db *models.Database,
 	botRoles *roles.BotRoles,
 	channelManager *channel.ChannelManager,
-) *CommandManager {
-	return &CommandManager{
-		cmds:           []Command{},
-		rawCmds:        map[string]*discordgo.ApplicationCommand{},
-		s:              s,
-		db:             db,
-		botRoles:       botRoles,
-		channelManager: channelManager,
+) (*CommandManager, error) {
+	err := removeCommands(s)
+	if err != nil {
+		return nil, fmt.Errorf("remove commands: %w", err)
 	}
+
+	allRawCommands, err := s.ApplicationCommands(
+		config.CONFIG.AppID,
+		config.CONFIG.GuildID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("cannot retrieve discord applications commands: %w", err)
+	}
+
+	return &CommandManager{
+		cmds:                    []Command{},
+		rawCmds:                 map[string]*discordgo.ApplicationCommand{},
+		s:                       s,
+		db:                      db,
+		botRoles:                botRoles,
+		channelManager:          channelManager,
+		allRawCommandsOnStartup: allRawCommands,
+	}, nil
 }
 
 func (m *CommandManager) AddCommands(cmds ...Command) error {
@@ -80,6 +95,8 @@ func (m *CommandManager) Start(s *discordgo.Session) {
 		commandCtx := context.Background()
 		responder := NewResponder(i, s, modalSubmitHandler)
 
+		responder.InteractionRespond().WaitForResponse()
+
 		for _, middlewareHandler := range command.Before() {
 			ctx, err := middlewareHandler(
 				commandCtx,
@@ -93,7 +110,7 @@ func (m *CommandManager) Start(s *discordgo.Session) {
 			if err != nil {
 				var errorWithResponseToUser *middleware.ErrorWithResponseToUser
 				if errors.As(err, &errorWithResponseToUser) {
-					responder.InteractionRespond().Content("⛔ %s", errorWithResponseToUser.MessageToUser)
+					responder.InteractionRespond().PrivateMessage("⛔ %s", errorWithResponseToUser.MessageToUser)
 					return
 				}
 
@@ -130,32 +147,77 @@ func (m *CommandManager) Start(s *discordgo.Session) {
 	})
 }
 
-func (m *CommandManager) Stop() {
-	for _, cmd := range m.rawCmds {
-		err := m.s.ApplicationCommandDelete(config.CONFIG.AppID, config.CONFIG.GuildID, cmd.ID)
-		if err != nil {
-			log.Error().Err(err).Msgf("cannot delete application command")
-		}
-	}
+func (m *CommandManager) Stop(s *discordgo.Session) {
+	_ = removeCommands(s)
 }
 
 func (m *CommandManager) createApplicationCommand(cmd Command) error {
-	raw, err := m.s.ApplicationCommandCreate(
-		config.CONFIG.AppID,
-		config.CONFIG.GuildID,
-		cmd.GetApplicationCommandBlueprint(),
+	rawCommand := helpers.First(
+		m.allRawCommandsOnStartup,
+		func(c *discordgo.ApplicationCommand) bool {
+			return c.Name == cmd.GetName()
+		},
 	)
-	if err != nil {
-		return fmt.Errorf("cannot create application command %q: %w", cmd.GetName(), err)
+
+	if rawCommand == nil {
+		raw, err := m.s.ApplicationCommandCreate(
+			config.CONFIG.AppID,
+			config.CONFIG.GuildID,
+			cmd.GetApplicationCommandBlueprint(),
+		)
+		if err != nil {
+			return fmt.Errorf("cannot create application command %q: %w", cmd.GetName(), err)
+		}
+
+		rawCommand = raw
+
+		log.Info().Msgf("command %s was created", rawCommand.Name)
+	} else {
+		log.Info().Msgf("command %s already exists", rawCommand.Name)
 	}
 
-	m.rawCmds[cmd.GetName()] = raw
+	m.rawCmds[cmd.GetName()] = rawCommand
 
 	return nil
 }
 
 func reportErrorToUser(r *Responder, err error, event *zerolog.Event) {
 	issueID := uuid.NewString()
-	r.InteractionRespond().Content(fmt.Sprintf("We encountered some issues during command invocation.\nPlease report this to an administrator.\nIssue ID %s", issueID))
+	r.InteractionRespond().
+		PrivateMessage(fmt.Sprintf(
+			"We encountered some issues during command invocation.\nPlease report this to an administrator.\nIssue ID %s",
+			issueID,
+		),
+		)
 	event.Err(err).Str("issue-id", issueID).Msg("cannot handle command")
+}
+
+
+func removeCommands(s *discordgo.Session) error {
+	if config.CONFIG.Env == "dev" {
+		return nil
+	}
+
+	allRawCommands, err := s.ApplicationCommands(
+		config.CONFIG.AppID,
+		config.CONFIG.GuildID,
+	)
+	if err != nil {
+		return fmt.Errorf("cannot retrieve discord applications commands: %w", err)
+	}
+
+	for _, rawCmd := range allRawCommands {
+		err := s.ApplicationCommandDelete(
+			config.CONFIG.AppID,
+			config.CONFIG.GuildID,
+			rawCmd.ID,
+		)
+		if err != nil {
+			return fmt.Errorf("cannot remove command: %w", err)
+		}
+
+		log.Info().Msgf("command %s was removed", rawCmd.Name)
+	}
+
+	return nil
 }

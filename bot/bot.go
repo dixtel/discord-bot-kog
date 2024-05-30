@@ -7,35 +7,17 @@ import (
 	"github.com/dixtel/dicord-bot-kog/channel"
 	"github.com/dixtel/dicord-bot-kog/command"
 	v2command "github.com/dixtel/dicord-bot-kog/command/v2"
-	"github.com/dixtel/dicord-bot-kog/config"
-	"github.com/dixtel/dicord-bot-kog/helpers"
 	"github.com/dixtel/dicord-bot-kog/models"
 	"github.com/dixtel/dicord-bot-kog/roles"
-	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 )
 
-func createCommands(
-	db *models.Database,
-	roles *roles.BotRoles,
-	submitMapsChannelID string,
-) []command.CommandInterface {
-	return []command.CommandInterface{
-		&command.UploadCommand{
-			Database:            db,
-			BotRoles:            roles,
-			SubmitMapsChannelID: submitMapsChannelID,
-		},
-		&command.RejectCommand{
-			Database:            db,
-			BotRoles:            roles,
-			SubmitMapsChannelID: submitMapsChannelID,
-		},
-		&command.UpdateCommand{
-			Database: db,
-			BotRoles: roles,
-		},
-	}
+var COMMANDS = []v2command.Command{
+	command.ModCommand{},
+	command.SubmitMapManageCommand{},
+	command.VoteForMapCommand{},
+	command.UploadMapCommand{},
+	command.UpdateMapCommand{},
+	command.SubmitMapManageCommand{},
 }
 
 func SetupBot(
@@ -43,97 +25,18 @@ func SetupBot(
 	db *models.Database,
 	roles *roles.BotRoles,
 	channelManager *channel.ChannelManager,
-) func() {
-	submitChannelID := channelManager.GetSubmitMapChannelID()
-	cmds := createCommands(db, roles, submitChannelID)
-
-	deferFunc := func() {
-		for _, cmd := range cmds {
-			cmd.ApplicationCommandDelete(s)
-		}
-	}
-
-	s.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		if i.Type != discordgo.InteractionApplicationCommand {
-			return
-		}
-
-		commandName := i.ApplicationCommandData().Name
-		log := log.With().Str("command-name", commandName).Logger()
-
-		handler := helpers.First(
-			cmds,
-			func(val command.CommandInterface) bool {
-				return val.GetName() == commandName
-			},
-		)
-		if handler == nil {
-			log.Error().Msgf("handler not found for given command name")
-			return
-		}
-
-		err := (handler).Handle(s, i)
-		if err != nil {
-			issueID := uuid.NewString()
-
-			_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-				Content: fmt.Sprintf("We encountered some issues during this command invocation. Please report this to an administrator. Issue ID %s", issueID),
-				Flags:   discordgo.MessageFlagsEphemeral,
-			})
-
-			log.Error().Err(err).Str("issueID", issueID).Msg("cannot handle command invocation")
-
-			return
-		}
-	})
-
-	allApplication, err := s.ApplicationCommands(config.CONFIG.AppID, config.CONFIG.GuildID)
+) (func(), error) {
+	manager, err := v2command.NewCommandManager(s, db, roles, channelManager)
 	if err != nil {
-		log.Err(err).Msg("cannot retrieve all application commands")
-		return deferFunc
+		return nil, fmt.Errorf("cannot create command manager: %w", err)
 	}
 
-	for _, cmd := range cmds {
-		e := helpers.GetFromArr(allApplication, func(e *discordgo.ApplicationCommand) bool {
-			return e.Name == cmd.GetName()
-		})
-
-		if e != nil {
-			log.Debug().Msgf("command '%s' already exists", cmd.GetName())
-			continue
-		}
-
-		log.Debug().Msgf("command '%s' not exists", cmd.GetName())
-
-		err := cmd.ApplicationCommandCreate(s)
-		if err != nil {
-			return deferFunc
-		}
-	}
-
-	return deferFunc
-}
-
-func SetupBotV2(
-	s *discordgo.Session,
-	db *models.Database,
-	roles *roles.BotRoles,
-	channelManager *channel.ChannelManager,
-) (cleanup func(), _ error) {
-	manager := v2command.NewCommandManager(s, db, roles, channelManager)
-
-	err := manager.AddCommands(
-		command.ModCommand{},
-		command.AcceptMapCommand{},
-		command.VoteForMapCommand{},
-	)
+	err = manager.AddCommands(COMMANDS...)
 	if err != nil {
 		return nil, fmt.Errorf("cannot add commands: %w", err)
 	}
 
 	manager.Start(s)
 
-	return func() {
-		manager.Stop()
-	}, nil
+	return func() {manager.Stop(s)},nil
 }

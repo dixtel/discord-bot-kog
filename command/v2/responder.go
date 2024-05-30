@@ -72,9 +72,19 @@ func (r *interactionRespond) WaitForResponse() {
 	}
 }
 
-func (r *interactionRespond) Content(format string, args ...interface{}) {
+func (r *interactionRespond) PublicMessage(format string, args ...interface{}) {
 	_, err := r.s.FollowupMessageCreate(r.i.Interaction, true, &discordgo.WebhookParams{
 		Content: fmt.Sprintf(format, args...),
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("cannot respond with message to interaction")
+	}
+}
+
+func (r *interactionRespond) PrivateMessage(format string, args ...interface{}) {
+	_, err := r.s.FollowupMessageCreate(r.i.Interaction, true, &discordgo.WebhookParams{
+		Content: fmt.Sprintf(format, args...),
+		Flags: discordgo.MessageFlagsEphemeral,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("cannot respond with message to interaction")
