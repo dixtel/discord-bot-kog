@@ -20,7 +20,11 @@ var UserIsTesterOrAcceptor CommandMiddleware = func(
 ) (context.Context, error) {
 	if !(botRoles.HasMapAcceptorRole(i.Member) || botRoles.HasMapTesterRole(i.Member)) {
 		return nil, &ErrorWithResponseToUser{
-			MessageToUser: "You don't have acceptor or tester role to use this command",
+			MessageToUser: fmt.Sprintf(
+				"You don't have %s or %s role to use this command",
+				helpers.MentionRole(botRoles.MapAcceptor.ID),
+				helpers.MentionRole(botRoles.MapTester.ID),
+			),
 		}
 	}
 

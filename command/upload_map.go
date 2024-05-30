@@ -25,6 +25,7 @@ func (UploadMapCommand) Before() []middleware.CommandMiddleware {
 		middleware.CreateOrGetUser,
 		middleware.InsideSubmitMapsChannel,
 		middleware.LastUserMapIsAccepted,
+		middleware.IsNotBannedFromSubmission,
 	}
 }
 

@@ -79,7 +79,7 @@ func (ModCommand) Handle(
 				return fmt.Errorf("cannot create banned user: %w", err)
 			}
 
-			r.InteractionRespond().PublicMessage("User %s is now banned from map submission", userID)
+			r.InteractionRespond().PublicMessage("User %s is now banned from map submission", helpers.MentionUser(userID))
 			return nil
 		}
 

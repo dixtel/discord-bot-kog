@@ -66,4 +66,3 @@ var LastUserMapIsAccepted CommandMiddleware = func(
 		MessageToUser: "You cannot upload a new map because you have another map waiting for acceptance.",
 	}
 }
-
